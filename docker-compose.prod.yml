@@ -57,10 +57,12 @@ services:
 
   api:
     restart: unless-stopped
+    command: ["prod"]
     environment:
       DJANGO_DEBUG: "false"
+      DJANGO_SETTINGS_MODULE: config.settings.prod
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
       interval: 15s
       timeout: 5s
       retries: 10

@@ -1,0 +1,38 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["staticfiles"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "DJ",  # flake8-django
+    "RUF", # ruff-specific
+]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "analytics",
+    "chat",
+    "config",
+    "controllers",
+    "facades",
+    "merchants",
+    "repositories",
+    "services",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Settings modules intentionally star-import the shared base.
+"config/settings/dev.py" = ["F403", "F405"]
+"config/settings/prod.py" = ["F403", "F405"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.dev"
+pythonpath = ["."]
+testpaths = ["tests"]

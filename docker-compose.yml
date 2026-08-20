@@ -91,11 +91,17 @@ services:
       - "${TEMPORAL_PORT:-7233}:7233"
 
   # Sprint 0.2 — Django + DRF. Also hosts chat turn-handling (§9.6); no separate chat service.
+  # ASGI runtime: uvicorn (dev, autoreload) / gunicorn + uvicorn workers (prod) — SSE-ready.
   api:
     profiles: ["app"]
     build:
-      context: ./backend/api
+      context: ./backend
+      dockerfile: api/Dockerfile
     env_file: .env
+    command: ["dev"]
+    volumes:
+      - ./backend/api:/app
+      - ./backend/shared:/opt/shared
     depends_on:
       postgres:
         condition: service_healthy

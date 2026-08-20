@@ -1,0 +1,92 @@
+# Production overlay. Resource limits, restart policies, healthchecks, debug off.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Chat is still not a Compose service in production: it lives in `api` (turns)
+# and `temporal-worker` (memory consolidation). Do not add a chat service here.
+# mcp-server / temporal-worker / notification-worker remain unwired until later sprints.
+
+services:
+  postgres:
+    restart: unless-stopped
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  temporal-postgres:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  clickhouse:
+    restart: unless-stopped
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  redis:
+    restart: unless-stopped
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  temporal:
+    restart: unless-stopped
+    ports: []
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  api:
+    restart: unless-stopped
+    environment:
+      DJANGO_DEBUG: "false"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  frontend:
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  ingestion:
+    restart: unless-stopped
+    environment:
+      DJANGO_DEBUG: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G

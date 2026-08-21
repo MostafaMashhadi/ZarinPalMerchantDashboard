@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "merchants",
     "analytics",
     "chat",
+    "agent",
 ]
 
 MIDDLEWARE = [

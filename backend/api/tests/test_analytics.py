@@ -5,8 +5,9 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-from shared.dtos import AnalysisParams, AnalysisResult, ProvenanceSpec
+from shared.dtos import ANALYSIS_KINDS, AnalysisParams, AnalysisResult, ProvenanceSpec
 
+from analytics.strategies.anomaly_detection import AnomalyDetectionAnalysisStrategy
 from analytics.strategies.cohort_retention import CohortRetentionAnalysisStrategy
 from analytics.strategies.event_impact import EventImpactAnalysisStrategy
 from analytics.strategies.peer_comparison import PeerComparisonAnalysisStrategy
@@ -387,17 +388,23 @@ class TestAnalysisStrategyFactory:
 
         assert isinstance(strategy, CohortRetentionAnalysisStrategy)
 
+    def test_create_anomaly_detection_strategy(self):
+        factory = AnalysisStrategyFactory()
+        strategy = factory.create("anomaly_detection")
+
+        assert isinstance(strategy, AnomalyDetectionAnalysisStrategy)
+
     def test_create_unknown_kind_raises(self):
         factory = AnalysisStrategyFactory()
         with pytest.raises(ValueError, match="Unknown analysis kind: unknown_kind"):
             factory.create("unknown_kind")
 
-    def test_create_not_implemented_kind_raises(self):
+    def test_factory_creates_all_registered_kinds(self):
         factory = AnalysisStrategyFactory()
-        with pytest.raises(
-            NotImplementedError, match="not yet implemented"
-        ):
-            factory.create("anomaly_detection")
+        for kind in ANALYSIS_KINDS:
+            strategy = factory.create(kind)
+            assert strategy is not None
+            assert strategy.kind == kind
 
     def test_factory_creates_fresh_instances(self):
         factory = AnalysisStrategyFactory()
@@ -627,3 +634,199 @@ class TestCohortRetentionAnalysisStrategy:
         result = strategy.compute(merchant_id, params)
 
         assert result.body["granularity"] == "month"
+
+
+class TestAnomalyDetectionAnalysisStrategy:
+    @pytest.fixture
+    def mock_clusters(self):
+        return [
+            {
+                "terminal_key": "T1",
+                "merchant_key": "M_TEST",
+                "bucket_start": "2026-08-20 10:00:00",
+                "amount_bucket": 198000000,
+                "cluster_size": 10,
+                "first_seen": "2026-08-20 10:00:00",
+                "last_seen": "2026-08-20 10:15:00",
+            },
+            {
+                "terminal_key": "T2",
+                "merchant_key": "M_TEST",
+                "bucket_start": "2026-08-19 08:00:00",
+                "amount_bucket": 5000000,
+                "cluster_size": 3,
+                "first_seen": "2026-08-19 08:00:00",
+                "last_seen": "2026-08-19 08:10:00",
+            },
+        ]
+
+    def test_compute_returns_flagged_clusters(self, merchant_id, fixed_period, mock_clusters):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_terminal_anomaly_clusters.return_value = mock_clusters
+
+        strategy = AnomalyDetectionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert isinstance(result, AnalysisResult)
+        assert result.kind == "anomaly_detection"
+        assert result.merchant_id == merchant_id
+        assert result.body["cluster_count"] == 2
+        assert result.body["flagged_count"] == 1
+        assert len(result.series) == 1
+        assert result.series[0]["terminal_key"] == "T1"
+        assert result.series[0]["cluster_size"] == 10
+        assert result.series[0]["severity"] > 0.4
+
+    def test_compute_no_anomalies(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_terminal_anomaly_clusters.return_value = [
+            {
+                "terminal_key": "T1",
+                "merchant_key": "M_TEST",
+                "bucket_start": "2026-08-20 10:00:00",
+                "amount_bucket": 1000000,
+                "cluster_size": 2,
+                "first_seen": "2026-08-20 10:00:00",
+                "last_seen": "2026-08-20 10:15:00",
+            },
+        ]
+
+        strategy = AnomalyDetectionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert result.body["flagged_count"] == 0
+        assert len(result.series) == 0
+        assert "No anomalous" in result.headline
+
+    def test_compute_empty_clusters(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_terminal_anomaly_clusters.return_value = []
+
+        strategy = AnomalyDetectionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert result.body["cluster_count"] == 0
+        assert result.body["flagged_count"] == 0
+        assert len(result.series) == 0
+
+    def test_severity_scoring_formula(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_terminal_anomaly_clusters.return_value = [
+            {
+                "terminal_key": "T1",
+                "merchant_key": "M_TEST",
+                "bucket_start": "2000-01-01 00:00:00",
+                "amount_bucket": 1000000,
+                "cluster_size": 5,
+                "first_seen": "2000-01-01 00:00:00",
+                "last_seen": "2000-01-01 00:15:00",
+            },
+        ]
+
+        strategy = AnomalyDetectionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert len(result.series) == 1
+        score = result.series[0]
+        assert score["base_severity"] == 0.5
+        assert score["severity"] == 0.5
+
+    def test_recency_boost_applied(self, merchant_id, fixed_period):
+
+        start, end = fixed_period
+        now = datetime.now(tz=UTC)
+        recent = now - timedelta(hours=2)
+
+        mock_repo = MagicMock()
+        mock_repo.get_terminal_anomaly_clusters.return_value = [
+            {
+                "terminal_key": "T1",
+                "merchant_key": "M_TEST",
+                "bucket_start": recent.strftime("%Y-%m-%d %H:%M:%S"),
+                "amount_bucket": 1000000,
+                "cluster_size": 5,
+                "first_seen": recent.strftime("%Y-%m-%d %H:%M:%S"),
+                "last_seen": recent.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        ]
+
+        strategy = AnomalyDetectionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        if len(result.series) == 1:
+            score = result.series[0]
+            assert score["recency_boost"] == 0.3
+            assert score["severity"] == 0.8
+
+    def test_threshold_filter_excludes_below_0_4(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_terminal_anomaly_clusters.return_value = [
+            {
+                "terminal_key": "T1",
+                "merchant_key": "M_TEST",
+                "bucket_start": "2000-01-01 00:00:00",
+                "amount_bucket": 1000000,
+                "cluster_size": 3,
+                "first_seen": "2000-01-01 00:00:00",
+                "last_seen": "2000-01-01 00:15:00",
+            },
+        ]
+
+        strategy = AnomalyDetectionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert result.body["flagged_count"] == 0
+
+    def test_required_provenance_returns_one_spec(self):
+        strategy = AnomalyDetectionAnalysisStrategy()
+        provenance = strategy.required_provenance()
+
+        assert len(provenance) == 1
+        assert isinstance(provenance[0], ProvenanceSpec)
+        assert provenance[0].source_query_id == "ch.terminal_noattempt_clusters.merge"
+
+    def test_no_caller_awareness(self, merchant_id, fixed_period, mock_clusters):
+        """Strategy has no notion of which caller invoked it."""
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_terminal_anomaly_clusters.return_value = mock_clusters
+
+        strategy = AnomalyDetectionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end, extra={})
+
+        result = strategy.compute(merchant_id, params)
+        assert result.kind == "anomaly_detection"
+
+    def test_publish_seam_is_noop_without_publisher(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_terminal_anomaly_clusters.return_value = []
+
+        strategy = AnomalyDetectionAnalysisStrategy(repo=mock_repo)
+        assert strategy._notify is None
+
+        params = AnalysisParams(period_start=start, period_end=end)
+        strategy.compute(merchant_id, params)
+
+    def test_set_insight_publisher(self):
+        strategy = AnomalyDetectionAnalysisStrategy()
+        mock_publisher = MagicMock()
+        strategy.set_insight_publisher(mock_publisher)
+        assert strategy._notify is mock_publisher

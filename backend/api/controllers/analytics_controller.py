@@ -283,7 +283,58 @@ class AnalysisCohortRetentionController(APIView):
         return Response(_serialize_result(result), status=status.HTTP_200_OK)
 
 
+class AnalysisAnomalyDetectionController(APIView):
+    """POST /api/v1/merchants/{merchant_ref}/analysis/anomaly-detection (§19.11)."""
+
+    def post(self, request: Request, merchant_ref: str) -> Response:
+        merchant_id = resolve_merchant_ref(merchant_ref)
+        if merchant_id is None:
+            return Response(
+                {"error": "MERCHANT_NOT_FOUND"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        period_start_str = request.data.get("period_start")
+        period_end_str = request.data.get("period_end")
+        extra = request.data.get("extra", {})
+
+        if not period_start_str or not period_end_str:
+            return Response(
+                {"error": "MISSING_PARAMETERS"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        period_start = parse_datetime(period_start_str)
+        period_end = parse_datetime(period_end_str)
+        if period_start is None or period_end is None:
+            return Response(
+                {"error": "INVALID_PERIOD_FORMAT"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if period_start >= period_end:
+            return Response(
+                {"error": "PERIOD_START_MUST_PRECEDE_PERIOD_END"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        params = AnalysisParams(
+            period_start=period_start,
+            period_end=period_end,
+            extra=extra,
+        )
+
+        facade = AnalyticsFacade()
+        result = facade.run_analysis(
+            merchant_id=merchant_id,
+            kind="anomaly_detection",
+            params=params,
+        )
+        return Response(_serialize_result(result), status=status.HTTP_200_OK)
+
+
 __all__ = [
+    "AnalysisAnomalyDetectionController",
     "AnalysisCohortRetentionController",
     "AnalysisEventImpactController",
     "AnalysisPeerComparisonController",

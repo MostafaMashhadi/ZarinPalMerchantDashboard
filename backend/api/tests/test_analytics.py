@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-from shared.dtos import ANALYSIS_KINDS, AnalysisParams, AnalysisResult, ProvenanceSpec
 
 from analytics.strategies.anomaly_detection import AnomalyDetectionAnalysisStrategy
 from analytics.strategies.cohort_retention import CohortRetentionAnalysisStrategy
@@ -13,6 +12,7 @@ from analytics.strategies.event_impact import EventImpactAnalysisStrategy
 from analytics.strategies.peer_comparison import PeerComparisonAnalysisStrategy
 from analytics.strategies.time_range import TimeRangeAnalysisStrategy
 from analytics.strategy_factory import AnalysisStrategyFactory
+from shared.dtos import ANALYSIS_KINDS, AnalysisParams, AnalysisResult, ProvenanceSpec
 
 
 @pytest.fixture

@@ -25,11 +25,11 @@ from uuid import UUID
 import redis
 from django.conf import settings
 from django.utils import timezone
-from shared.dtos import AnalysisParams, AnalysisResult
 
 from analytics.strategy_factory import AnalysisStrategyFactory
 from facades.authz import AuthPrincipal, AuthzEnforcer
 from repositories.transaction_repository import TransactionRepository
+from shared.dtos import AnalysisParams, AnalysisResult
 
 
 class AnalyticsFacade:

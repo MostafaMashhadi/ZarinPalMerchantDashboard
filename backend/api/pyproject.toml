@@ -25,6 +25,7 @@ known-first-party = [
     "merchants",
     "repositories",
     "services",
+    "shared",
 ]
 
 [tool.ruff.lint.per-file-ignores]

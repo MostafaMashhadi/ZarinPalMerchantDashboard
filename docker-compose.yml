@@ -97,7 +97,9 @@ services:
     build:
       context: ./backend
       dockerfile: api/Dockerfile
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     command: ["dev"]
     volumes:
       - ./backend/api:/app
@@ -119,7 +121,9 @@ services:
     profiles: ["app"]
     build:
       context: ./frontend
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       - api
     ports:
@@ -130,7 +134,9 @@ services:
     profiles: ["app"]
     build:
       context: ./backend/ingestion
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy

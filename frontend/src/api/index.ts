@@ -1,1 +1,9 @@
-export { mockSuccess, mockError, apiCall, type ApiCallOptions } from './http'
+export {
+  mockSuccess,
+  mockError,
+  apiCall,
+  streamCall,
+  type ApiCallOptions,
+  type StreamCallOptions,
+  type StreamChunk,
+} from './http'

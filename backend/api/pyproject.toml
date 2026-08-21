@@ -1,7 +1,7 @@
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["staticfiles", "merchants/migrations", "analytics/migrations"]
+extend-exclude = ["staticfiles", "merchants/migrations", "analytics/migrations", "chat/migrations", "agent/migrations"]
 
 [tool.ruff.lint]
 select = [
@@ -35,6 +35,8 @@ known-first-party = [
 # are unavoidable and not our concern.
 "merchants/migrations/*.py" = ["E501", "RUF012", "I001"]
 "analytics/migrations/*.py" = ["E501", "RUF012", "I001"]
+"chat/migrations/*.py" = ["E501", "RUF012", "I001"]
+"agent/migrations/*.py" = ["E501", "RUF012", "I001"]
 # RUF012 false positives on Django Meta.indexes (lists) and APIView class attrs.
 "**/models.py" = ["RUF012"]
 "**/apps.py" = ["RUF012"]

@@ -16,11 +16,11 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from shared.dtos import AnalysisParams
 
 from facades.analytics_facade import AnalyticsFacade
 from facades.authz import AuthPrincipal
 from merchants.models import Merchant
+from shared.dtos import AnalysisParams
 
 
 def resolve_merchant_ref(merchant_ref: str) -> UUID | None:

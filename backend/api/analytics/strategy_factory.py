@@ -8,14 +8,13 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from shared.dtos import ANALYSIS_KINDS
-from shared.protocols import AnalysisStrategy
-
 from analytics.strategies.anomaly_detection import AnomalyDetectionAnalysisStrategy
 from analytics.strategies.cohort_retention import CohortRetentionAnalysisStrategy
 from analytics.strategies.event_impact import EventImpactAnalysisStrategy
 from analytics.strategies.peer_comparison import PeerComparisonAnalysisStrategy
 from analytics.strategies.time_range import TimeRangeAnalysisStrategy
+from shared.dtos import ANALYSIS_KINDS
+from shared.protocols import AnalysisStrategy
 
 
 class AnalysisStrategyFactory:

@@ -89,9 +89,8 @@ class TestAnalyticsFacadeAuthZ:
             )
 
     def test_run_analysis_requires_principal(self, merchant_id, fixed_period):
-        from shared.dtos import AnalysisParams
-
         from facades.analytics_facade import AnalyticsFacade
+        from shared.dtos import AnalysisParams
 
         facade = AnalyticsFacade()
         start, end = fixed_period

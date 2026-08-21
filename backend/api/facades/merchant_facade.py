@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from facades.authz import AuthPrincipal, AuthzStub
+from facades.authz import AuthPrincipal, AuthzEnforcer
 from services.auth_exceptions import (
     AccountLockedError,
     AuthError,
@@ -36,10 +36,10 @@ class MerchantFacade:
         self,
         *,
         auth_service: AuthService | None = None,
-        authz: AuthzStub | None = None,
+        authz: AuthzEnforcer | None = None,
     ) -> None:
         self._auth = auth_service or AuthService()
-        self._authz = authz or AuthzStub()
+        self._authz = authz or AuthzEnforcer()
 
     def login(self, *, email: str, password: str, ip_address: str | None = None) -> LoginResponse:
         result = self._auth.login(email=email, password=password, ip_address=ip_address)
@@ -61,8 +61,12 @@ class MerchantFacade:
         principal: AuthPrincipal | None,
         merchant_id: uuid.UUID,
     ) -> None:
-        """Object-level AuthZ stub — delegates to AuthzStub (Task 2.4 completes enforcement)."""
-        self._authz.require_merchant_access(principal, merchant_id)
+        """Object-level AuthZ enforcement (§13, §19.23).
+
+        Called by every method that touches merchant data.
+        Raises PermissionDenied (→ 403) if principal is not entitled.
+        """
+        self._authz.check_object_permission(principal, merchant_id)
 
     @staticmethod
     def _to_login_response(result: LoginResult) -> LoginResponse:
@@ -77,6 +81,7 @@ __all__ = [
     "AccountLockedError",
     "AuthError",
     "AuthPrincipal",
+    "AuthzEnforcer",
     "InvalidCredentialsError",
     "InvalidRefreshTokenError",
     "LoginResponse",

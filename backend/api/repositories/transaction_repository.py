@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import urllib.parse
 import urllib.request
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -65,7 +66,7 @@ class TransactionRepository:
                 query = query.replace(f"{{{key}}}", str(value))
             elif isinstance(value, UUID):
                 query = query.replace(f"{{{key}}}", f"'{value}'")
-            elif isinstance(value, (datetime, date)):
+            elif isinstance(value, datetime):
                 query = query.replace(f"{{{key}}}", f"'{value.strftime('%Y-%m-%d')}'")
             else:
                 query = query.replace(f"{{{key}}}", f"'{value}'")
@@ -75,7 +76,6 @@ class TransactionRepository:
         password = settings.CLICKHOUSE_PASSWORD
         req = urllib.request.Request(full_url)
         if auth and password:
-            import base64
             credentials = base64.b64encode(f"{auth}:{password}".encode()).decode()
             req.add_header("Authorization", f"Basic {credentials}")
 

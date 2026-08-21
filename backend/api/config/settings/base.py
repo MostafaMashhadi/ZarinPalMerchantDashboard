@@ -49,6 +49,10 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Edge-layer: rate limiting (§13, §19.22) — before controllers
+    "middlewares.rate_limiter.RateLimitMiddleware",
+    # Edge-layer: JWT authentication — resolves principal for AuthZ (§13)
+    "middlewares.auth.JwtAuthenticationMiddleware",
 ]
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGIN")

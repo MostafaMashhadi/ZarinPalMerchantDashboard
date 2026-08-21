@@ -42,7 +42,9 @@ services:
       retries: 10
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8
+    # Pin a concrete Alpine image: the floating 24.8 manifest has produced an
+    # unusable `/entrypoint.sh: exec format error` on local Docker hosts.
+    image: clickhouse/clickhouse-server:24.8.4.13-alpine
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-zarinpal}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-zarinpal}
@@ -97,7 +99,9 @@ services:
     build:
       context: ./backend
       dockerfile: api/Dockerfile
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     command: ["dev"]
     volumes:
       - ./backend/api:/app
@@ -119,7 +123,9 @@ services:
     profiles: ["app"]
     build:
       context: ./frontend
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       - api
     ports:
@@ -127,10 +133,15 @@ services:
 
   # Sprint 1 — CSV ingestion pipeline.
   ingestion:
-    profiles: ["app"]
+    # The ingestion image is introduced with the ingestion pipeline.  Keeping
+    # it out of the web-app profile prevents `docker compose --profile app up`
+    # from attempting to build a service whose Dockerfile has not landed yet.
+    profiles: ["ingestion"]
     build:
       context: ./backend/ingestion
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy

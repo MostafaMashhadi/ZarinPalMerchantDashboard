@@ -11,8 +11,11 @@ COPY shared/ /opt/shared/
 RUN pip install -e /opt/shared
 
 WORKDIR /app
-COPY api/requirements.txt .
-RUN pip install -r requirements.txt
+COPY api/requirements.txt api/requirements-dev.txt ./
+# The default image runs the development command, so include the declared test
+# tooling as well.  Without this, `make test` and `pytest` fail at import time
+# inside the same API container used for local integration testing.
+RUN pip install -r requirements-dev.txt
 
 COPY api/ .
 RUN chmod +x entrypoint.sh

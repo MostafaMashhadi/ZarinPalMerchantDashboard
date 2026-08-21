@@ -10,6 +10,9 @@ env = environ.Env(
     DJANGO_DEBUG=(bool, False),
     DJANGO_ALLOWED_HOSTS=(list, []),
     CORS_ALLOWED_ORIGIN=(list, []),
+    JWT_ACCESS_TTL_SECONDS=(int, 900),
+    JWT_REFRESH_TTL_SECONDS=(int, 1_209_600),
+    REDIS_PORT=(int, 6379),
 )
 
 # Repo-root .env for local runs; no-op when absent (compose injects env vars).
@@ -79,8 +82,17 @@ DATABASES = {
     }
 }
 
+JWT_ACCESS_SECRET = env("JWT_ACCESS_SECRET")
+JWT_REFRESH_SECRET = env("JWT_REFRESH_SECRET")
+JWT_ACCESS_TTL_SECONDS = env("JWT_ACCESS_TTL_SECONDS")
+JWT_REFRESH_TTL_SECONDS = env("JWT_REFRESH_TTL_SECONDS")
+
+REDIS_HOST = env("REDIS_HOST", default="")
+REDIS_PORT = env("REDIS_PORT")
+REDIS_PASSWORD = env("REDIS_PASSWORD", default="")
+
 REST_FRAMEWORK = {
-    # JWT auth lands in a later sprint (§13); endpoints are anonymous until then.
+    # Protected merchant endpoints gain JWT authentication in Task 2.4.
 }
 
 LANGUAGE_CODE = "en-us"

@@ -1,6 +1,10 @@
 from django.urls import path
 
 from controllers.analytics_controller import (
+    AnalysisAnomalyDetectionController,
+    AnalysisCohortRetentionController,
+    AnalysisEventImpactController,
+    AnalysisPeerComparisonController,
     AnalysisTimeRangeController,
     DashboardSummaryController,
 )
@@ -21,5 +25,25 @@ urlpatterns = [
         "merchants/<str:merchant_ref>/analysis/time-range",
         AnalysisTimeRangeController.as_view(),
         name="analysis-time-range",
+    ),
+    path(
+        "merchants/<str:merchant_ref>/analysis/peer-comparison",
+        AnalysisPeerComparisonController.as_view(),
+        name="analysis-peer-comparison",
+    ),
+    path(
+        "merchants/<str:merchant_ref>/analysis/event-impact",
+        AnalysisEventImpactController.as_view(),
+        name="analysis-event-impact",
+    ),
+    path(
+        "merchants/<str:merchant_ref>/analysis/cohort-retention",
+        AnalysisCohortRetentionController.as_view(),
+        name="analysis-cohort-retention",
+    ),
+    path(
+        "merchants/<str:merchant_ref>/analysis/anomaly-detection",
+        AnalysisAnomalyDetectionController.as_view(),
+        name="analysis-anomaly-detection",
     ),
 ]

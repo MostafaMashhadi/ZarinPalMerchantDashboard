@@ -11,6 +11,10 @@ from typing import ClassVar
 from shared.dtos import ANALYSIS_KINDS
 from shared.protocols import AnalysisStrategy
 
+from analytics.strategies.anomaly_detection import AnomalyDetectionAnalysisStrategy
+from analytics.strategies.cohort_retention import CohortRetentionAnalysisStrategy
+from analytics.strategies.event_impact import EventImpactAnalysisStrategy
+from analytics.strategies.peer_comparison import PeerComparisonAnalysisStrategy
 from analytics.strategies.time_range import TimeRangeAnalysisStrategy
 
 
@@ -24,6 +28,10 @@ class AnalysisStrategyFactory:
 
     _registry: ClassVar[dict[str, type[AnalysisStrategy]]] = {
         "time_range": TimeRangeAnalysisStrategy,
+        "event_impact": EventImpactAnalysisStrategy,
+        "cohort_retention": CohortRetentionAnalysisStrategy,
+        "peer_comparison": PeerComparisonAnalysisStrategy,
+        "anomaly_detection": AnomalyDetectionAnalysisStrategy,
     }
 
     def create(self, kind: str) -> AnalysisStrategy:

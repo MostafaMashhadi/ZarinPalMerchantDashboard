@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import urllib.parse
 import urllib.request
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -46,6 +47,13 @@ class TransactionRepository:
             raise ClickHouseError(f"Merchant not found: {merchant_id}") from exc
         return merchant.merchant_key
 
+    def _resolve_merchant(self, merchant_id: UUID) -> Merchant:
+        """Resolve internal merchant UUID to the Merchant model instance."""
+        try:
+            return Merchant.objects.select_related("category").get(pk=merchant_id)
+        except Merchant.DoesNotExist as exc:
+            raise ClickHouseError(f"Merchant not found: {merchant_id}") from exc
+
     def _query_clickhouse(
         self, sql: str, params: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
@@ -58,7 +66,7 @@ class TransactionRepository:
                 query = query.replace(f"{{{key}}}", str(value))
             elif isinstance(value, UUID):
                 query = query.replace(f"{{{key}}}", f"'{value}'")
-            elif isinstance(value, (datetime, date)):
+            elif isinstance(value, datetime):
                 query = query.replace(f"{{{key}}}", f"'{value.strftime('%Y-%m-%d')}'")
             else:
                 query = query.replace(f"{{{key}}}", f"'{value}'")
@@ -68,7 +76,6 @@ class TransactionRepository:
         password = settings.CLICKHOUSE_PASSWORD
         req = urllib.request.Request(full_url)
         if auth and password:
-            import base64
             credentials = base64.b64encode(f"{auth}:{password}".encode()).decode()
             req.add_header("Authorization", f"Basic {credentials}")
 
@@ -184,6 +191,215 @@ class TransactionRepository:
         )
         return self._query_clickhouse(sql)
 
+    def get_peer_set_range(
+        self,
+        category_id: str,
+        deciles: list[int],
+        period_start: datetime,
+        period_end: datetime,
+    ) -> list[dict[str, Any]]:
+        """Get all merchants whose decile falls within the given deciles list.
+
+        Used for small-bucket ±1 decile fallback.
+        """
+        deciles_str = ", ".join(str(d) for d in deciles)
+        sql = """
+            WITH deciled AS (
+                SELECT
+                    merchant_key,
+                    gross_volume,
+                    ntile(10) OVER (ORDER BY gross_volume DESC) AS decile
+                FROM (
+                    SELECT
+                        merchant_key,
+                        sumMerge(gross_volume_state) AS gross_volume
+                    FROM tx_daily_rollup
+                    WHERE category_id = '{category_id}'
+                      AND day BETWEEN '{start_date}' AND '{end_date}'
+                    GROUP BY merchant_key
+                )
+            )
+            SELECT merchant_key, gross_volume, decile
+            FROM deciled
+            WHERE decile IN ({deciles_str})
+            ORDER BY gross_volume DESC
+        """
+
+        sql = sql.format(
+            category_id=category_id,
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+            deciles_str=deciles_str,
+        )
+        return self._query_clickhouse(sql)
+
+    def get_category_all_merchants(
+        self,
+        category_id: str,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> list[dict[str, Any]]:
+        """Get all merchants in a category with their gross volume.
+
+        Used for the final small-bucket fallback (whole category).
+        """
+        sql = """
+            WITH deciled AS (
+                SELECT
+                    merchant_key,
+                    gross_volume,
+                    ntile(10) OVER (ORDER BY gross_volume DESC) AS decile
+                FROM (
+                    SELECT
+                        merchant_key,
+                        sumMerge(gross_volume_state) AS gross_volume
+                    FROM tx_daily_rollup
+                    WHERE category_id = '{category_id}'
+                      AND day BETWEEN '{start_date}' AND '{end_date}'
+                    GROUP BY merchant_key
+                )
+            )
+            SELECT merchant_key, gross_volume, decile
+            FROM deciled
+            ORDER BY gross_volume DESC
+        """
+
+        sql = sql.format(
+            category_id=category_id,
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+        )
+        return self._query_clickhouse(sql)
+
+    def get_category_decile_ranking(
+        self,
+        category_id: str,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> list[dict[str, Any]]:
+        """Compute volume deciles for all merchants in a category in a single query.
+
+        Uses ntile(10) window function inside ClickHouse — not Python post-processing.
+        Gross volume excludes Reversed sessions (only Verified/Paid count).
+        """
+        sql = """
+            SELECT
+                merchant_key,
+                gross_volume,
+                ntile(10) OVER (ORDER BY gross_volume DESC) AS decile
+            FROM (
+                SELECT
+                    merchant_key,
+                    sumMerge(gross_volume_state) AS gross_volume
+                FROM tx_daily_rollup
+                WHERE category_id = '{category_id}'
+                  AND day BETWEEN '{start_date}' AND '{end_date}'
+                GROUP BY merchant_key
+            )
+            ORDER BY gross_volume DESC
+        """
+
+        sql = sql.format(
+            category_id=category_id,
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+        )
+        return self._query_clickhouse(sql)
+
+    def get_merchant_decile(
+        self,
+        merchant_id: UUID,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[str, Any] | None:
+        """Get the decile assignment for a specific merchant within their category.
+
+        Returns dict with keys: merchant_key, gross_volume, decile, category_id,
+        total_merchants, decile_count.
+        """
+        merchant = self._resolve_merchant(merchant_id)
+        merchant_key = merchant.merchant_key
+        category_id = merchant.category.category_key
+
+        sql = """
+            SELECT
+                merchant_key,
+                gross_volume,
+                decile,
+                total_merchants,
+                decile_count
+            FROM (
+                SELECT
+                    merchant_key,
+                    gross_volume,
+                    ntile(10) OVER (ORDER BY gross_volume DESC) AS decile,
+                    count() OVER () AS total_merchants,
+                    count() OVER (
+                        PARTITION BY ntile(10) OVER (ORDER BY gross_volume DESC)
+                    ) AS decile_count
+                FROM (
+                    SELECT
+                        merchant_key,
+                        sumMerge(gross_volume_state) AS gross_volume
+                    FROM tx_daily_rollup
+                    WHERE category_id = '{category_id}'
+                      AND day BETWEEN '{start_date}' AND '{end_date}'
+                    GROUP BY merchant_key
+                )
+            )
+            WHERE merchant_key = '{merchant_key}'
+        """
+
+        sql = sql.format(
+            category_id=category_id,
+            merchant_key=merchant_key,
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+        )
+        rows = self._query_clickhouse(sql)
+        if not rows:
+            return None
+        result = rows[0]
+        result["category_id"] = category_id
+        return result
+
+    def get_peer_set(
+        self,
+        category_id: str,
+        decile: int,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> list[dict[str, Any]]:
+        """Get all merchants in the same category and decile (±1 decile not included here).
+
+        Returns list of dicts with merchant_key, gross_volume, decile.
+        """
+        sql = """
+            SELECT
+                merchant_key,
+                gross_volume,
+                ntile(10) OVER (ORDER BY gross_volume DESC) AS decile
+            FROM (
+                SELECT
+                    merchant_key,
+                    sumMerge(gross_volume_state) AS gross_volume
+                FROM tx_daily_rollup
+                WHERE category_id = '{category_id}'
+                  AND day BETWEEN '{start_date}' AND '{end_date}'
+                GROUP BY merchant_key
+            )
+            WHERE ntile(10) OVER (ORDER BY gross_volume DESC) = {decile}
+            ORDER BY gross_volume DESC
+        """
+
+        sql = sql.format(
+            category_id=category_id,
+            decile=decile,
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+        )
+        return self._query_clickhouse(sql)
+
     def get_category_summary(
         self,
         category_id: str,
@@ -284,16 +500,142 @@ class TransactionRepository:
             end_date=period_end.strftime("%Y-%m-%d"),
         )
         return self._query_clickhouse(sql)
-"""Django API wrapper / re-export for TransactionRepository."""
 
-import sys
-from pathlib import Path
+    def get_events_in_range(
+        self,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> list[dict[str, Any]]:
+        """Query EVENT_CALENDAR for events overlapping the given period (§7.4)."""
+        sql = """
+            SELECT
+                event_key,
+                title,
+                start_date,
+                end_date,
+                event_type
+            FROM event_calendar
+            WHERE start_date <= '{end_date}'
+              AND end_date >= '{start_date}'
+            ORDER BY start_date
+        """
 
-# Add backend directory to sys.path if not present
-backend_dir = str(Path(__file__).resolve().parent.parent.parent)
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
+        sql = sql.format(
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+        )
+        return self._query_clickhouse(sql)
 
-from repositories.transaction_repository import TransactionRepository  # noqa: E402
+    def get_merchant_gross_volume(
+        self,
+        merchant_id: UUID,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> int:
+        """Get a single merchant's gross volume for a period using -Merge pattern.
 
-__all__ = ["TransactionRepository"]
+        Excludes Reversed sessions (only Verified/Paid count).
+        """
+        merchant_key = self._resolve_merchant_key(merchant_id)
+
+        sql = """
+            SELECT
+                sumMerge(gross_volume_state) AS gross_volume
+            FROM tx_daily_rollup
+            WHERE merchant_key = '{merchant_key}'
+              AND day BETWEEN '{start_date}' AND '{end_date}'
+        """
+
+        sql = sql.format(
+            merchant_key=merchant_key,
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+        )
+        rows = self._query_clickhouse(sql)
+        if not rows:
+            return 0
+        return int(rows[0].get("gross_volume", 0))
+
+    def get_category_gross_volume(
+        self,
+        category_id: str,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> int:
+        """Get a category's total gross volume for a period using -Merge pattern."""
+        sql = """
+            SELECT
+                sumMerge(category_gross_volume_state) AS category_gross_volume
+            FROM category_daily_rollup
+            WHERE category_id = '{category_id}'
+              AND day BETWEEN '{start_date}' AND '{end_date}'
+        """
+
+        sql = sql.format(
+            category_id=category_id,
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+        )
+        rows = self._query_clickhouse(sql)
+        if not rows:
+            return 0
+        return int(rows[0].get("category_gross_volume", 0))
+
+    def get_cohort_retention(
+        self,
+        merchant_id: UUID,
+        cohort_start: datetime,
+        cohort_end: datetime,
+        retention_end: datetime,
+        granularity: str = "week",
+    ) -> list[dict[str, Any]]:
+        """Get cohort retention data segmented by verify_type (§7.5).
+
+        Cohort = distinct payer_card_key values with a successful
+        (Verified/Paid) session in the cohort period, scoped to this
+        merchant only (payer_card_key is not comparable across merchants).
+
+        For each subsequent period bucket, returns the fraction of the
+        original cohort with at least one more successful session.
+        """
+        merchant_key = self._resolve_merchant_key(merchant_id)
+
+        bucket_expr = (
+            "toStartOfWeek(created_at)"
+            if granularity == "week"
+            else "toStartOfMonth(created_at)"
+        )
+
+        sql = """
+            WITH cohort AS (
+                SELECT DISTINCT payer_card_key
+                FROM tx_raw
+                WHERE merchant_key = '{merchant_key}'
+                  AND created_at >= '{cohort_start}'
+                  AND created_at < '{cohort_end}'
+                  AND session_status IN ('Verified', 'Paid')
+            )
+            SELECT
+                {bucket_expr} AS bucket,
+                verify_type,
+                count(DISTINCT payer_card_key) AS retained_users,
+                (SELECT count() FROM cohort) AS cohort_size
+            FROM tx_raw
+            WHERE merchant_key = '{merchant_key}'
+              AND created_at >= '{cohort_start}'
+              AND created_at < '{retention_end}'
+              AND session_status IN ('Verified', 'Paid')
+              AND payer_card_key IN (SELECT payer_card_key FROM cohort)
+            GROUP BY bucket, verify_type
+            ORDER BY bucket, verify_type
+        """
+
+        sql = sql.format(
+            merchant_key=merchant_key,
+            cohort_start=cohort_start.strftime("%Y-%m-%d"),
+            cohort_end=cohort_end.strftime("%Y-%m-%d"),
+            retention_end=retention_end.strftime("%Y-%m-%d"),
+            bucket_expr=bucket_expr,
+        )
+        return self._query_clickhouse(sql)
+

@@ -1,6 +1,7 @@
 from django.urls import path
 
 from controllers.analytics_controller import (
+    AnalysisAnomalyDetectionController,
     AnalysisCohortRetentionController,
     AnalysisEventImpactController,
     AnalysisPeerComparisonController,
@@ -39,5 +40,10 @@ urlpatterns = [
         "merchants/<str:merchant_ref>/analysis/cohort-retention",
         AnalysisCohortRetentionController.as_view(),
         name="analysis-cohort-retention",
+    ),
+    path(
+        "merchants/<str:merchant_ref>/analysis/anomaly-detection",
+        AnalysisAnomalyDetectionController.as_view(),
+        name="analysis-anomaly-detection",
     ),
 ]

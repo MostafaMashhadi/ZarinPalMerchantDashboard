@@ -1,4 +1,9 @@
-"""Pytest bootstrap — supply local env defaults when .env is absent."""
+"""Root-level pytest conftest — set env defaults before Django settings load.
+
+Pytest-django initializes Django settings during conftest loading,
+which happens before tests/conftest.py. This root conftest ensures
+env defaults are set early.
+"""
 
 import os
 

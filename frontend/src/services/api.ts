@@ -20,7 +20,7 @@ import { refreshAccessToken } from '@/auth/refreshInterceptor'
 
 /** Set VITE_API_BASE_URL to the DRF origin (e.g. http://localhost:8000).
  *  Set VITE_USE_MOCK=false to talk to the real backend once it is up. */
-const API_BASE: string = (import.meta.env.VITE_API_BASE_URL ?? '/api/v1') as string
+const API_BASE: string = ((import.meta.env.VITE_API_BASE_URL ?? '/api/v1') as string).replace(/\/$/, '')
 export const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') === 'true'
 
 export class ApiError extends Error {
@@ -33,6 +33,21 @@ export class ApiError extends Error {
     this.code = code
     this.retryAfterSeconds = retryAfterSeconds
   }
+}
+
+type BackendAuthTokens = {
+  access_token: string
+  refresh_token: string
+}
+
+function toAuthTokens(tokens: BackendAuthTokens): AuthTokens {
+  return { access: tokens.access_token, refresh: tokens.refresh_token }
+}
+
+function secondsUntil(timestamp?: string): number | undefined {
+  if (!timestamp) return undefined
+  const milliseconds = Date.parse(timestamp) - Date.now()
+  return Number.isFinite(milliseconds) ? Math.max(1, Math.ceil(milliseconds / 1_000)) : undefined
 }
 
 export function setTokens(tokens: AuthTokens | null) {
@@ -76,15 +91,21 @@ async function request<T>(
     throw new ApiError(429, data.error ?? 'RATE_LIMITED', 'محدودیت نرخ درخواست — کمی بعد دوباره تلاش کنید', data.retry_after_seconds ?? 1)
   }
 
-  if (resp.status === 423) {
-    const data = (await resp.json().catch(() => ({}))) as { error?: string; detail?: string; retry_after_seconds?: number }
-    throw new ApiError(423, data.error ?? 'LOCKED', data.detail ?? 'حساب شما قفل شده است', data.retry_after_seconds ?? 60)
+  // The current DRF auth controller represents a temporary account lock as 403.
+  if (resp.status === 423 || resp.status === 403) {
+    const data = (await resp.json().catch(() => ({}))) as { error?: string; detail?: string; retry_after_seconds?: number; locked_until?: string }
+    if (data.error === 'ACCOUNT_LOCKED' || resp.status === 423) {
+      throw new ApiError(resp.status, data.error ?? 'ACCOUNT_LOCKED', data.detail ?? 'حساب شما قفل شده است', data.retry_after_seconds ?? secondsUntil(data.locked_until) ?? 60)
+    }
+    throw new ApiError(resp.status, data.error, data.detail ?? `خطای ${resp.status}`)
   }
 
   if (!resp.ok) {
     const data = (await resp.json().catch(() => ({}))) as { error?: string; detail?: string; message?: string }
     throw new ApiError(resp.status, data.error, data.detail ?? data.message ?? `خطای ${resp.status}`)
   }
+
+  if (resp.status === 204 || resp.headers.get('content-length') === '0') return undefined as T
 
   const data = (await resp.json()) as T & { data_freshness?: string }
   if (data.data_freshness === 'cached_fallback') {
@@ -99,9 +120,11 @@ export const authApi = {
   login: (email: string, password: string) =>
     USE_MOCK
       ? mockApi.login(email, password)
-      : request<AuthTokens>('/auth/login', { method: 'POST', body: { email, password }, retry: false }),
+      : request<BackendAuthTokens>('/auth/login', { method: 'POST', body: { email, password }, retry: false }).then(toAuthTokens),
   logout: () =>
-    USE_MOCK ? Promise.resolve({ ok: true }) : request<{ ok: boolean }>('/auth/logout', { method: 'POST', retry: false }),
+    USE_MOCK
+      ? Promise.resolve()
+      : request<void>('/auth/logout', { method: 'POST', body: { refresh_token: tokenStorage.getRefreshToken() }, retry: false }),
 }
 
 export const api = {

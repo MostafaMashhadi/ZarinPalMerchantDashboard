@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
-import { Bot, LoaderCircle, MessageSquarePlus, Send, Square, RefreshCw } from 'lucide-react'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Bot, LoaderCircle, MessageSquarePlus, Send, Square, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { api, API_BASE, USE_MOCK } from '@/services/api'
@@ -37,6 +36,8 @@ export default function ChatPanel({ open, onOpenChange, merchantRef }: ChatPanel
   const [error, setError] = useState<InlineError>(null)
   const [provenance, setProvenance] = useState<Record<string, ProvenanceEntry[]>>({})
   const abortRef = useRef<AbortController | null>(null)
+  const composerRef = useRef<HTMLTextAreaElement | null>(null)
+  const messageEndRef = useRef<HTMLDivElement | null>(null)
 
   const loadSessions = useCallback(async () => {
     setLoading(true)
@@ -65,6 +66,14 @@ export default function ChatPanel({ open, onOpenChange, merchantRef }: ChatPanel
       setHasOlderMessages(result.total > result.items.length)
     }).catch(() => setMessages([]))
   }, [merchantRef, sessionId])
+  useEffect(() => {
+    if (!open) return
+    const timer = window.setTimeout(() => composerRef.current?.focus(), 100)
+    return () => window.clearTimeout(timer)
+  }, [open])
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ block: 'end' })
+  }, [messages, streaming])
 
   const loadOlderMessages = async () => {
     if (!sessionId) return
@@ -134,21 +143,40 @@ export default function ChatPanel({ open, onOpenChange, merchantRef }: ChatPanel
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() } }
   const onSubmit = (event: FormEvent) => { event.preventDefault(); void send() }
 
-  return <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="left" className="w-full gap-0 rounded-e-3xl border-e border-border bg-white p-0 shadow-2xl sm:bottom-6 sm:left-6 sm:top-auto sm:h-[min(720px,calc(100dvh-3rem))] sm:max-w-xl" dir="rtl" aria-describedby="chat-panel-description">
-      <SheetHeader className="border-b border-border/60 bg-[#f7fbf8] pe-14">
-        <SheetTitle className="flex items-center gap-2 text-[#1f3b2d]"><span className="flex size-8 items-center justify-center rounded-xl bg-[#ffd700] text-[#1f3b2d]"><Bot aria-hidden="true" /></span> دستیار هوشمند</SheetTitle>
-        <SheetDescription id="chat-panel-description">بر پایه‌ی داده‌ها و تحلیل‌های پذیرندگی شما؛ پاسخ‌ها قابل پیگیری‌اند.</SheetDescription>
-      </SheetHeader>
-      <div className="grid min-h-0 flex-1 grid-cols-[10rem_1fr] border-b border-border/60 sm:grid-cols-[13rem_1fr]">
-        <aside className="border-e border-border/60 p-2" aria-label="جلسات گفتگو">
-          <Button className="btn-zarin-primary mb-2 w-full" size="sm" onClick={createSession} disabled={creating}><MessageSquarePlus data-icon="inline-start" aria-hidden="true" /> گفتگوی جدید</Button>
-          <ScrollArea className="h-[calc(100dvh-15rem)]"><div className="space-y-1 pe-2">
-            {loading ? <LoaderCircle className="mx-auto mt-5 size-4 animate-spin text-muted-foreground" /> : sessions.map((session) => <Button key={session.id} variant={session.id === sessionId ? 'secondary' : 'ghost'} className="h-auto w-full justify-start whitespace-normal text-right text-xs" onClick={() => setSessionId(session.id)}>{new Date(session.last_activity_at).toLocaleDateString('fa-IR')}</Button>)}
-          </div></ScrollArea>
-        </aside>
-        <section className="flex min-w-0 flex-col" aria-label="پیام‌های گفتگو">
-          <ScrollArea className="h-[calc(100dvh-15rem)]"><div className="space-y-4 p-4" aria-live="polite">
+  if (!open) return null
+
+  return <aside
+    dir="rtl"
+    role="dialog"
+    aria-modal="false"
+    aria-labelledby="chat-panel-title"
+    aria-describedby="chat-panel-description"
+    onKeyDown={(event) => { if (event.key === 'Escape') onOpenChange(false) }}
+    className="fixed inset-x-3 bottom-3 z-50 flex h-[min(680px,calc(100dvh-1.5rem))] flex-col overflow-hidden rounded-3xl border border-border/80 bg-popover text-popover-foreground shadow-[0_24px_70px_rgba(31,59,45,0.22)] sm:inset-x-auto sm:bottom-6 sm:left-6 sm:h-[min(680px,calc(100dvh-3rem))] sm:w-[min(27rem,calc(100vw-3rem))]"
+  >
+    <header className="shrink-0 border-b border-border/70 bg-[#f7fbf8] px-4 py-3">
+      <div className="flex items-center gap-2">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-[#ffd700] text-[#1f3b2d]"><Bot aria-hidden="true" /></span>
+        <div className="min-w-0 flex-1">
+          <h2 id="chat-panel-title" className="text-sm font-bold text-[#1f3b2d]">دستیار هوشمند</h2>
+          <p id="chat-panel-description" className="mt-0.5 text-xs text-muted-foreground">پاسخ‌های مبتنی بر داده‌های پذیرندگی شما</p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" className="shrink-0" aria-label="بستن گفتگوی دستیار هوشمند" onClick={() => onOpenChange(false)}><X aria-hidden="true" /></Button>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <label htmlFor="chat-session" className="sr-only">انتخاب جلسه گفتگو</label>
+        <select id="chat-session" value={sessionId ?? ''} disabled={loading || !sessions.length} onChange={(event) => setSessionId(event.target.value)} className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60">
+          {!sessions.length && <option value="">{loading ? 'در حال بارگذاری گفتگوها…' : 'هنوز گفتگویی ندارید'}</option>}
+          {sessions.map((session) => <option key={session.id} value={session.id}>گفتگو · {new Date(session.last_activity_at).toLocaleDateString('fa-IR')}</option>)}
+        </select>
+        <Button type="button" className="btn-zarin-primary shrink-0" size="sm" onClick={() => void createSession()} disabled={creating}>
+          {creating ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <MessageSquarePlus aria-hidden="true" />}
+          گفتگوی جدید
+        </Button>
+      </div>
+    </header>
+    <section className="flex min-h-0 flex-1 flex-col" aria-label="پیام‌های گفتگو">
+      <ScrollArea className="min-h-0 flex-1"><div className="flex min-h-full flex-col gap-4 p-4" aria-live="polite" aria-relevant="additions text">
             {hasOlderMessages && <Button className="mx-auto flex" variant="ghost" size="sm" onClick={() => void loadOlderMessages()}>نمایش پیام‌های پیشین</Button>}
             {messages.map((message) => <article key={message.id} className={cn('flex flex-col gap-2', message.role === 'user' ? 'items-end' : 'items-start')}>
               <div dir="auto" className={cn('max-w-[90%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-7 shadow-sm', message.role === 'user' ? 'rounded-se-sm bg-primary text-primary-foreground' : 'rounded-ss-sm border border-border/70 bg-white text-foreground')}>
@@ -161,15 +189,14 @@ export default function ChatPanel({ open, onOpenChange, merchantRef }: ChatPanel
                 : <Button variant="ghost" size="sm" onClick={() => void loadProvenance(message)}>مشاهده کوئری</Button>)}
             </article>)}
             {error && <div className="rounded-xl border border-border bg-muted/50 p-3 text-sm text-muted-foreground" role="alert"><p>{error.message}</p><Button className="mt-2" variant="outline" size="sm" disabled={error.retryAfter > 1} onClick={() => void send(error.content)}><RefreshCw aria-hidden="true" /> تلاش دوباره{error.retryAfter > 1 ? ` (${error.retryAfter} ثانیه)` : ''}</Button></div>}
-          </div></ScrollArea>
-          <form className="border-t border-border/60 p-3" onSubmit={onSubmit}>
-            <label className="sr-only" htmlFor="chat-message">پیام شما</label>
-            <div className="flex items-end gap-2"><textarea id="chat-message" dir="auto" className="min-h-11 flex-1 resize-none rounded-xl border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder="سؤال خود را درباره عملکرد پذیرندگی بنویسید…" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} disabled={streaming} />
-              {streaming ? <Button type="button" variant="outline" size="icon" aria-label="توقف پاسخ" onClick={() => abortRef.current?.abort()}><Square aria-hidden="true" /></Button> : <Button type="submit" size="icon" aria-label="ارسال پیام" disabled={!draft.trim() || !sessionId}><Send aria-hidden="true" /></Button>}
-            </div><p className="mt-1 text-xs text-muted-foreground">Enter برای ارسال · Shift+Enter برای خط جدید</p>
-          </form>
-        </section>
-      </div>
-    </SheetContent>
-  </Sheet>
+            <div ref={messageEndRef} />
+      </div></ScrollArea>
+      <form className="shrink-0 border-t border-border/70 bg-white/80 p-3" onSubmit={onSubmit}>
+        <label className="sr-only" htmlFor="chat-message">پیام شما</label>
+        <div className="flex items-end gap-2"><textarea ref={composerRef} id="chat-message" dir="auto" className="min-h-11 flex-1 resize-none rounded-xl border bg-background px-3 py-2 text-sm leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder="سؤال خود را درباره عملکرد پذیرندگی بنویسید…" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} disabled={streaming || !sessionId} />
+          {streaming ? <Button type="button" variant="outline" size="icon" aria-label="توقف پاسخ" onClick={() => abortRef.current?.abort()}><Square aria-hidden="true" /></Button> : <Button type="submit" size="icon" aria-label="ارسال پیام" disabled={!draft.trim() || !sessionId}><Send aria-hidden="true" /></Button>}
+        </div><p className="mt-1 text-xs text-muted-foreground">Enter برای ارسال · Shift+Enter برای خط جدید</p>
+      </form>
+    </section>
+  </aside>
 }

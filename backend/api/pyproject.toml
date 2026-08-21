@@ -1,7 +1,7 @@
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["staticfiles"]
+extend-exclude = ["staticfiles", "merchants/migrations", "analytics/migrations"]
 
 [tool.ruff.lint]
 select = [
@@ -31,6 +31,14 @@ known-first-party = [
 # Settings modules intentionally star-import the shared base.
 "config/settings/dev.py" = ["F403", "F405"]
 "config/settings/prod.py" = ["F403", "F405"]
+# Django auto-generates migration files — line length and mutable-class defaults
+# are unavoidable and not our concern.
+"merchants/migrations/*.py" = ["E501", "RUF012", "I001"]
+"analytics/migrations/*.py" = ["E501", "RUF012", "I001"]
+# RUF012 false positives on Django Meta.indexes (lists) and APIView class attrs.
+"**/models.py" = ["RUF012"]
+"**/apps.py" = ["RUF012"]
+"controllers/*.py" = ["RUF012"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings.dev"

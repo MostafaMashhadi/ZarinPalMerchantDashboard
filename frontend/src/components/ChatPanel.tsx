@@ -135,14 +135,14 @@ export default function ChatPanel({ open, onOpenChange, merchantRef }: ChatPanel
   const onSubmit = (event: FormEvent) => { event.preventDefault(); void send() }
 
   return <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="left" className="w-full gap-0 p-0 sm:max-w-3xl" dir="rtl" aria-describedby="chat-panel-description">
-      <SheetHeader className="border-b border-border/60 pe-14">
-        <SheetTitle className="flex items-center gap-2"><Bot className="size-5 text-primary" /> گفتگوی هوشمند</SheetTitle>
-        <SheetDescription id="chat-panel-description">پاسخ‌ها بر اساس داده‌ها و تحلیل‌های پذیرندگی شما ارائه می‌شوند.</SheetDescription>
+    <SheetContent side="left" className="w-full gap-0 rounded-e-3xl border-e border-border bg-white p-0 shadow-2xl sm:bottom-6 sm:left-6 sm:top-auto sm:h-[min(720px,calc(100dvh-3rem))] sm:max-w-xl" dir="rtl" aria-describedby="chat-panel-description">
+      <SheetHeader className="border-b border-border/60 bg-[#f7fbf8] pe-14">
+        <SheetTitle className="flex items-center gap-2 text-[#1f3b2d]"><span className="flex size-8 items-center justify-center rounded-xl bg-[#ffd700] text-[#1f3b2d]"><Bot aria-hidden="true" /></span> دستیار هوشمند</SheetTitle>
+        <SheetDescription id="chat-panel-description">بر پایه‌ی داده‌ها و تحلیل‌های پذیرندگی شما؛ پاسخ‌ها قابل پیگیری‌اند.</SheetDescription>
       </SheetHeader>
       <div className="grid min-h-0 flex-1 grid-cols-[10rem_1fr] border-b border-border/60 sm:grid-cols-[13rem_1fr]">
         <aside className="border-e border-border/60 p-2" aria-label="جلسات گفتگو">
-          <Button className="mb-2 w-full" size="sm" onClick={createSession} disabled={creating}><MessageSquarePlus aria-hidden="true" /> گفتگوی جدید</Button>
+          <Button className="btn-zarin-primary mb-2 w-full" size="sm" onClick={createSession} disabled={creating}><MessageSquarePlus data-icon="inline-start" aria-hidden="true" /> گفتگوی جدید</Button>
           <ScrollArea className="h-[calc(100dvh-15rem)]"><div className="space-y-1 pe-2">
             {loading ? <LoaderCircle className="mx-auto mt-5 size-4 animate-spin text-muted-foreground" /> : sessions.map((session) => <Button key={session.id} variant={session.id === sessionId ? 'secondary' : 'ghost'} className="h-auto w-full justify-start whitespace-normal text-right text-xs" onClick={() => setSessionId(session.id)}>{new Date(session.last_activity_at).toLocaleDateString('fa-IR')}</Button>)}
           </div></ScrollArea>
@@ -151,7 +151,7 @@ export default function ChatPanel({ open, onOpenChange, merchantRef }: ChatPanel
           <ScrollArea className="h-[calc(100dvh-15rem)]"><div className="space-y-4 p-4" aria-live="polite">
             {hasOlderMessages && <Button className="mx-auto flex" variant="ghost" size="sm" onClick={() => void loadOlderMessages()}>نمایش پیام‌های پیشین</Button>}
             {messages.map((message) => <article key={message.id} className={cn('flex flex-col gap-2', message.role === 'user' ? 'items-end' : 'items-start')}>
-              <div dir="auto" className={cn('max-w-[90%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-7', message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
+              <div dir="auto" className={cn('max-w-[90%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-7 shadow-sm', message.role === 'user' ? 'rounded-se-sm bg-primary text-primary-foreground' : 'rounded-ss-sm border border-border/70 bg-white text-foreground')}>
                 {message.content || (streaming && message.role === 'assistant' ? <span className="inline-flex items-center gap-2 text-muted-foreground"><LoaderCircle className="size-3 animate-spin" /> در حال بررسی…</span> : null)}
                 {streaming && message.id.startsWith('optimistic-assistant') && message.content && <span className="ms-1 inline-block h-4 w-0.5 animate-pulse bg-primary align-middle" aria-label="در حال تولید پاسخ" />}
               </div>

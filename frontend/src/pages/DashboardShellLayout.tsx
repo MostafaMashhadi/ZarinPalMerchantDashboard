@@ -12,7 +12,7 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
-import { MessageSquareDashed } from 'lucide-react'
+import { MessageCircle, Sparkles } from 'lucide-react'
 import ChatPanel from '../components/ChatPanel'
 
 const DashboardShellLayout: React.FC = () => {
@@ -54,7 +54,7 @@ const DashboardShellLayout: React.FC = () => {
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="flex min-h-dvh w-full bg-background text-foreground" dir="rtl">
+      <div className="app-backdrop flex min-h-dvh w-full text-foreground" dir="rtl">
         {/* ── Sidebar ── */}
         <Sidebar side="right" variant="floating" collapsible="icon" className="border-e border-sidebar-border">
           <SidebarNav />
@@ -62,15 +62,15 @@ const DashboardShellLayout: React.FC = () => {
 
         {/* ── Main Content ── */}
         <SidebarInset className="bg-transparent">
-          <header className="flex items-center justify-between gap-4 border-b border-border/70 px-4 py-3 lg:px-8" dir="rtl">
+          <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-border/70 bg-white/85 px-4 py-3 backdrop-blur-xl lg:px-8" dir="rtl">
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">{selectedMerchant}</p>
-              <h1 className="truncate text-base font-semibold">Dashboard</h1>
+              <p className="text-xs text-muted-foreground">زرین‌پال من · {selectedMerchant}</p>
+              <h1 className="truncate text-base font-bold">سلام، خوش آمدید</h1>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setChatOpen(true)} aria-label="باز کردن گفتگوی هوشمند">
-              <MessageSquareDashed data-icon="inline-start" aria-hidden="true" />
-              گفتگوی هوشمند
-            </Button>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="hidden rounded-full bg-primary/10 px-3 py-1.5 font-semibold text-primary sm:inline">حساب فعال</span>
+              <span className="size-2 rounded-full bg-primary" aria-label="سرویس فعال" />
+            </div>
           </header>
           <main className="relative mx-auto w-full flex-1 space-y-6 px-4 py-7 lg:space-y-7 lg:px-8 lg:py-9">
             {(degraded || dataFreshness === 'cached_fallback') && <DegradedDataBadge />}
@@ -92,6 +92,20 @@ const DashboardShellLayout: React.FC = () => {
               </div>
             </div>
           </footer>
+          <Button
+            type="button"
+            size="lg"
+            onClick={() => setChatOpen(true)}
+            aria-label="باز کردن گفتگوی دستیار هوشمند"
+            aria-expanded={chatOpen}
+            className="fixed bottom-5 left-5 z-30 h-14 rounded-full bg-[#1f3b2d] px-4 text-white shadow-[0_12px_28px_rgba(31,59,45,0.25)] hover:bg-[#163324] sm:bottom-7 sm:left-7"
+          >
+            <span className="relative flex size-8 items-center justify-center rounded-full bg-[#ffd700] text-[#1f3b2d]">
+              <MessageCircle aria-hidden="true" />
+              <Sparkles className="absolute -right-1 -top-1 size-3 text-[#ffd700]" fill="currentColor" aria-hidden="true" />
+            </span>
+            <span className="hidden font-bold sm:inline">دستیار هوشمند</span>
+          </Button>
           <ChatPanel open={chatOpen} onOpenChange={setChatOpen} merchantRef={selectedMerchant} />
         </SidebarInset>
       </div>

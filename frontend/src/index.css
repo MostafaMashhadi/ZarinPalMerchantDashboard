@@ -3,24 +3,25 @@
 @import "shadcn/tailwind.css";
 
 @theme {
-  --font-sans: "Vazirmatn", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Vazirmatn Variable", "Vazirmatn", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Fira Code", Monaco, "Cascadia Code", Consolas, monospace;
 
   /* ─── ZarinPal Brand Palette ─────────────────────────────── */
-  --color-zarin-green:        #36B37E;
-  --color-zarin-green-light:  #48C990;
-  --color-zarin-green-dark:   #2A9065;
-  --color-zarin-green-muted:  #1D6347;
+  --color-zarin-green:        #21aa58;
+  --color-zarin-green-light:  #40c875;
+  --color-zarin-green-dark:   #168a46;
+  --color-zarin-green-muted:  #146a39;
 
   --color-zarin-navy:         #0D1B4B;
   --color-zarin-navy-soft:    #1A2F6B;
   --color-zarin-navy-muted:   #263D7A;
   --color-zarin-navy-faint:   #E8EBF6;
 
-  --color-zarin-gold:         #F5A623;
-  --color-zarin-gold-light:   #FFBB44;
-  --color-zarin-gold-dark:    #C8841B;
-  --color-zarin-gold-muted:   #7A5210;
+  --color-zarin-gold:         #ffd700;
+  --color-zarin-gold-light:   #ffe76a;
+  --color-zarin-gold-dark:    #e6b800;
+  --color-zarin-gold-muted:   #7b6200;
+  --color-zarin-yellow:       #ffd700;
 
   --color-gold:               #F5A623;
   --color-gold-light:         #FFBB44;
@@ -91,43 +92,42 @@
   --radius-4xl: calc(var(--radius) * 2.8);
 }
 
-/* ─── ZarinPal Dark-First Theme ───────────────────────────────── */
+/* ─── ZarinPal light theme ─────────────────────────────────────── */
 :root {
-  color-scheme: dark;
-  --radius: 0.75rem;
-
-  --background:             #0F172A;
-  --foreground:             #F8FAFC;
-  --card:                   #1B2336;
-  --card-foreground:        #F8FAFC;
-  --popover:                #1B2336;
-  --popover-foreground:     #F8FAFC;
-  --primary:                #36B37E;
-  --primary-foreground:     #062E22;
-  --secondary:              #273247;
-  --secondary-foreground:   #F8FAFC;
-  --muted:                  #273247;
-  --muted-foreground:       #B5C0D0;
-  --accent:                 #F5A623;
-  --accent-foreground:      #1A1306;
-  --destructive:            #FB7185;
-  --destructive-foreground: #3F0713;
-  --border:                 #3A475D;
-  --input:                  #3A475D;
-  --ring:                   #48C990;
-  --chart-1:                #48C990;
-  --chart-2:                #90B7FF;
-  --chart-3:                #F5A623;
-  --chart-4:                #8B9CFF;
-  --chart-5:                #F472B6;
-  --sidebar:                #111C31;
-  --sidebar-foreground:     #F8FAFC;
-  --sidebar-primary:        #36B37E;
-  --sidebar-primary-foreground: #062E22;
-  --sidebar-accent:         #273247;
-  --sidebar-accent-foreground: #F8FAFC;
-  --sidebar-border:         #3A475D;
-  --sidebar-ring:           #36B37E;
+  color-scheme: light;
+  --radius: 1rem;
+  --background:             #f7f8fa;
+  --foreground:             #1a1e23;
+  --card:                   #ffffff;
+  --card-foreground:        #1a1e23;
+  --popover:                #ffffff;
+  --popover-foreground:     #1a1e23;
+  --primary:                #21aa58;
+  --primary-foreground:     #ffffff;
+  --secondary:              #f1f4f2;
+  --secondary-foreground:   #243128;
+  --muted:                  #f4f6f5;
+  --muted-foreground:       #667085;
+  --accent:                 #fff4b8;
+  --accent-foreground:      #4b3d00;
+  --destructive:            #d92d20;
+  --destructive-foreground: #ffffff;
+  --border:                 #e4e9e5;
+  --input:                  #d8e0da;
+  --ring:                   #21aa58;
+  --chart-1:                #21aa58;
+  --chart-2:                #0d1b4b;
+  --chart-3:                #e6b800;
+  --chart-4:                #82b1ff;
+  --chart-5:                #f08a5d;
+  --sidebar:                #ffffff;
+  --sidebar-foreground:     #334036;
+  --sidebar-primary:        #21aa58;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent:         #edf8f0;
+  --sidebar-accent-foreground: #168a46;
+  --sidebar-border:         #e4e9e5;
+  --sidebar-ring:           #21aa58;
 }
 
 /* ─── Base ────────────────────────────────────────────────────── */
@@ -175,7 +175,7 @@ html { scroll-behavior: smooth; }
     /* Green echo – upper center */
     radial-gradient(ellipse 42% 35% at 48% -12%,  rgba(54, 179, 126, 0.07), transparent 62%),
     /* Base gradient: crisp white → cool blue-grey */
-    linear-gradient(168deg, #111C31 0%, #0F172A 55%, #0B1324 100%);
+    linear-gradient(168deg, #ffffff 0%, #f7f8fa 55%, #f0f5f1 100%);
 }
 
 .dashboard-home {
@@ -330,8 +330,8 @@ html { scrollbar-width: none; }
 .card-glass {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  background: rgb(27 35 54 / 0.88);
-  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.88);
+  border: 1px solid rgb(228 233 229 / 0.9);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.9),
     0 1px 2px  rgba(13, 27, 75, 0.04),
@@ -349,22 +349,22 @@ html { scrollbar-width: none; }
 
 /* Navy hero for login sidebar */
 .surface-navy {
-  background: linear-gradient(145deg, #0D1B4B 0%, #1A2F6B 60%, #263D7A 100%);
+  background: linear-gradient(145deg, #1f3b2d 0%, #276642 60%, #21aa58 100%);
 }
 
 /* ─── Button System ──────────────────────────────────────────── */
 .btn-zarin-primary {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #36B37E 0%, #2A9065 100%);
+  background: #21aa58;
   color: #FFFFFF;
   border-radius: 10px;
   font-weight: 700;
   transition: all 0.22s cubic-bezier(0.23, 1, 0.32, 1);
-  box-shadow: 0 2px 8px rgba(54, 179, 126, 0.32);
+  box-shadow: 0 6px 14px rgba(33, 170, 88, 0.2);
 }
 .btn-zarin-primary:hover {
-  background: linear-gradient(135deg, #48C990 0%, #36B37E 100%);
+  background: #168a46;
   box-shadow: 0 4px 18px rgba(54, 179, 126, 0.42);
   transform: translateY(-1px);
 }

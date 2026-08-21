@@ -6,4 +6,5 @@ export {
   type ApiCallOptions,
   type StreamCallOptions,
   type StreamChunk,
+  StreamResponseError,
 } from './http'

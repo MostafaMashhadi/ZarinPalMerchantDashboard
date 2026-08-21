@@ -1,49 +1,54 @@
-import React from 'react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { InsightDTO } from '../services/types'
+import React, { useMemo, useState } from 'react'
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import type { InsightDTO, ProvenanceEntry } from '../services/types'
 import InsightCard from './InsightCard'
+
+type CurvePoint = { label: string; value: number }
+type Cohort = { verify_type?: string; label?: string; retention_curve?: CurvePoint[] }
 
 interface CohortRetentionCardProps {
   insight: InsightDTO
-  provenance?: { sequence: number; source_query_id: string; clickhouse_sql: string; query_params: Record<string, unknown>; computed_at: string; result_summary: Record<string, unknown> }[]
-  onGranularityChange?: (granularity: string) => void
+  provenance?: ProvenanceEntry[]
 }
 
-const CohortRetentionCard: React.FC<CohortRetentionCardProps> = ({ insight, provenance, onGranularityChange }) => {
+const CohortRetentionCard: React.FC<CohortRetentionCardProps> = ({ insight, provenance }) => {
   const body = insight.body as Record<string, unknown>
-  const granularity = (body.granularity as string) ?? 'week'
+  const cohorts = useMemo(() => (Array.isArray(body.cohorts) ? body.cohorts as Cohort[] : []), [body.cohorts])
+  const [selectedVerifyType, setSelectedVerifyType] = useState(cohorts[0]?.verify_type ?? '')
+  const selected = cohorts.find((cohort) => cohort.verify_type === selectedVerifyType)
+  const curve = selected?.retention_curve ?? (Array.isArray(body.retention_curve) ? body.retention_curve as CurvePoint[] : [])
 
   return (
     <InsightCard insight={insight} provenance={provenance}>
-      <div className="flex items-center gap-2">
-        <Select value={granularity} onValueChange={onGranularityChange}>
-          <SelectTrigger className="h-8 w-32 text-xs">
-            <SelectValue placeholder="گرانولاریتی" />
-          </SelectTrigger>
+      {cohorts.length > 1 && (
+        <Select value={selectedVerifyType} onValueChange={setSelectedVerifyType}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="سگمنت مشتریان" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="week">هفتگی</SelectItem>
-            <SelectItem value="month">ماهانه</SelectItem>
+            <SelectGroup>
+              {cohorts.map((cohort) => <SelectItem key={cohort.verify_type} value={cohort.verify_type ?? ''}>{cohort.label ?? cohort.verify_type}</SelectItem>)}
+            </SelectGroup>
           </SelectContent>
         </Select>
-      </div>
-      {Boolean(body.retention_curve) && Array.isArray(body.retention_curve) && (
-        <div className="h-44 w-full">
-          <CurveChart data={body.retention_curve as Array<{ label: string; value: number }>} />
-        </div>
       )}
+      {curve.length > 0 && <RetentionCurve data={curve} />}
     </InsightCard>
   )
 }
 
-const CurveChart: React.FC<{ data: Array<{ label: string; value: number }> }> = ({ data }) => (
-  <div className="flex items-end gap-1 h-full w-full px-2">
-    {data.map((pt, i) => (
-      <div key={i} className="flex flex-1 flex-col items-center gap-1">
-        <div className="w-full rounded-t-md bg-primary/80 transition-all duration-500" style={{ height: `${Math.max(4, Number(pt.value))}%` }} />
-        <span className="text-[9px] text-muted-foreground truncate w-full text-center">{String(pt.label)}</span>
-      </div>
-    ))}
-  </div>
-)
+function RetentionCurve({ data }: { data: CurvePoint[] }) {
+  return (
+    <div className="h-48 w-full" aria-label="منحنی نرخ بازگشت مشتریان">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+          <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} />
+          <YAxis tickLine={false} axisLine={false} unit="%" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} />
+          <Tooltip formatter={(value) => [`${value}%`, 'نرخ بازگشت']} />
+          <Line type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
 
 export default CohortRetentionCard

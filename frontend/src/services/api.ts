@@ -11,6 +11,9 @@ import type {
   Page,
   ProvenanceEntry,
   RunCostDTO,
+  ChatMessageDTO,
+  ChatSessionDTO,
+  CostDashboardDTO,
 } from './types'
 import { tokenStorage } from '@/auth/tokenStorage'
 import { refreshAccessToken } from '@/auth/refreshInterceptor'
@@ -161,6 +164,21 @@ export const api = {
     USE_MOCK
       ? mockApi.markNotificationRead(merchantRef, id)
       : request<NotificationDTO>(`/merchants/${merchantRef}/notifications/${id}/mark-read`, { method: 'POST' }),
+
+  listChatSessions: (merchantRef: string, page = 1) =>
+    USE_MOCK ? mockApi.listChatSessions(merchantRef, page) : request<Page<ChatSessionDTO>>(`/merchants/${merchantRef}/chat/sessions?page=${page}`),
+
+  createChatSession: (merchantRef: string) =>
+    USE_MOCK ? mockApi.createChatSession(merchantRef) : request<ChatSessionDTO>(`/merchants/${merchantRef}/chat/sessions`, { method: 'POST' }),
+
+  listChatMessages: (merchantRef: string, sessionId: string, page = 1) =>
+    USE_MOCK ? mockApi.listChatMessages(merchantRef, sessionId, page) : request<Page<ChatMessageDTO>>(`/merchants/${merchantRef}/chat/sessions/${sessionId}/messages?page=${page}`),
+
+  saveChatMessages: (merchantRef: string, sessionId: string, userContent: string, assistantContent: string, deliveryMode: 'streaming' | 'buffered') =>
+    mockApi.saveChatMessages(merchantRef, sessionId, userContent, assistantContent, deliveryMode),
+
+  getCostDashboard: (merchantRef: string) =>
+    USE_MOCK ? mockApi.getCostDashboard(merchantRef) : request<CostDashboardDTO>(`/ops/cost?merchant_ref=${encodeURIComponent(merchantRef)}`),
 }
 
 export default api

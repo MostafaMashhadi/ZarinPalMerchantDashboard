@@ -11,6 +11,9 @@ import type {
   Page,
   ProvenanceEntry,
   RunCostDTO,
+  ChatMessageDTO,
+  ChatSessionDTO,
+  CostDashboardDTO,
 } from './types'
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -80,6 +83,19 @@ const getPool = (merchantRef: string): InsightDTO[] => {
 const merchantOf = (ref: string) => mockMerchants.find((m) => m.id === ref) ?? mockMerchants[0]
 
 const runs = new Map<string, { run: AgentRunDTO; startedAt: number }>()
+const chatSessions = new Map<string, ChatSessionDTO[]>()
+const chatMessages = new Map<string, ChatMessageDTO[]>()
+let chatSequence = 0
+const ensureChat = (merchantRef: string) => {
+  if (!chatSessions.has(merchantRef)) {
+    const session: ChatSessionDTO = { id: 'chat-demo', status: 'active', started_at: iso(2), last_activity_at: iso(0) }
+    chatSessions.set(merchantRef, [session])
+    chatMessages.set(session.id, [
+      { id: 'chat-1', session_id: session.id, role: 'assistant', content: 'سلام! می‌توانم درباره روند پرداخت‌ها، تحلیل‌ها و مقایسه‌های شما کمک کنم.', referenced_insight_ids: [], created_at: iso(2), delivery_mode: 'buffered' },
+    ])
+  }
+  return chatSessions.get(merchantRef)!
+}
 
 export type MockApi = {
   login(email: string, password: string): Promise<AuthTokens>
@@ -93,6 +109,11 @@ export type MockApi = {
   getRunCost(merchantRef: string, runId: string): Promise<RunCostDTO>
   listNotifications(merchantRef: string, status?: string): Promise<NotificationDTO[]>
   markNotificationRead(merchantRef: string, id: string): Promise<NotificationDTO>
+  listChatSessions(merchantRef: string, page?: number): Promise<Page<ChatSessionDTO>>
+  createChatSession(merchantRef: string): Promise<ChatSessionDTO>
+  listChatMessages(merchantRef: string, sessionId: string, page?: number): Promise<Page<ChatMessageDTO>>
+  saveChatMessages(merchantRef: string, sessionId: string, userContent: string, assistantContent: string, deliveryMode: 'streaming' | 'buffered'): Promise<ChatMessageDTO>
+  getCostDashboard(merchantRef: string): Promise<CostDashboardDTO>
   simulateLockout(retryAfter?: number): void
 }
 
@@ -222,6 +243,62 @@ export const mockApi: MockApi = {
     await delay(150)
     // notifications are derived; mark-read is a no-op in mock (state resets on refetch)
     return { id, insight_id: '', title: '', body: '', severity: 'info', channel: 'portal', status: 'sent', created_at: iso(0), read_at: new Date().toISOString() } as NotificationDTO
+  },
+
+  async listChatSessions(merchantRef, page = 1) {
+    await delay(180)
+    const items = ensureChat(merchantRef)
+    return { items, total: items.length, page, page_size: 20 }
+  },
+
+  async createChatSession(merchantRef) {
+    await delay(150)
+    const sessions = ensureChat(merchantRef)
+    chatSequence += 1
+    const session = { id: `chat-${Date.now()}-${chatSequence}`, status: 'active', started_at: iso(0), last_activity_at: iso(0) }
+    sessions.unshift(session)
+    chatMessages.set(session.id, [])
+    return session
+  },
+
+  async listChatMessages(merchantRef, sessionId, page = 1) {
+    await delay(200)
+    ensureChat(merchantRef)
+    const all = chatMessages.get(sessionId) ?? []
+    const pageSize = 30
+    const items = all.slice(Math.max(0, all.length - page * pageSize), all.length - (page - 1) * pageSize)
+    return { items, total: all.length, page, page_size: pageSize }
+  },
+
+  async saveChatMessages(merchantRef, sessionId, userContent, assistantContent, deliveryMode) {
+    ensureChat(merchantRef)
+    const rows = chatMessages.get(sessionId) ?? []
+    chatSequence += 1
+    rows.push({ id: `chat-user-${chatSequence}`, session_id: sessionId, role: 'user', content: userContent, referenced_insight_ids: [], created_at: iso(0) })
+    chatSequence += 1
+    const assistant: ChatMessageDTO = {
+      id: `chat-assistant-${chatSequence}`, session_id: sessionId, role: 'assistant', content: assistantContent,
+      referenced_insight_ids: assistantContent.includes('مقایسه') || assistantContent.includes('درآمد') ? [getPool(merchantRef)[0].id] : [],
+      created_at: iso(0), delivery_mode: deliveryMode, data_freshness: assistantContent.includes('کش') ? 'cached_fallback' : 'live',
+    }
+    rows.push(assistant)
+    chatMessages.set(sessionId, rows)
+    return assistant
+  },
+
+  async getCostDashboard(merchantRef) {
+    await delay(220)
+    return {
+      realtime: [
+        { scope: 'agent', tokens_in: 11200, tokens_out: 4800, cost_usd: 0.2384, runs: 4 },
+        { scope: 'chat', tokens_in: 6800, tokens_out: 3200, cost_usd: 0.0842, runs: 12 },
+      ],
+      historical: [
+        { scope: 'agent', tokens_in: 4200, tokens_out: 1400, cost_usd: 0.084, runs: 2, date: iso(0), merchant_ref: merchantRef },
+        { scope: 'chat', tokens_in: 2500, tokens_out: 1200, cost_usd: 0.031, runs: 5, date: iso(0), merchant_ref: merchantRef },
+        { scope: 'chat', tokens_in: 4300, tokens_out: 2000, cost_usd: 0.0532, runs: 7, date: iso(1), merchant_ref: merchantRef },
+      ],
+    }
   },
 
   simulateLockout(retryAfter = 60) {

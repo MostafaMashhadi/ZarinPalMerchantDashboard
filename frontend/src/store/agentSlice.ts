@@ -21,7 +21,8 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 export const startSummary = createAsyncThunk(
   'agent/startSummary',
   async (payload: { merchantRef: string; period: { start: string; end: string } }) => {
-    const idemKey = `summary-${payload.merchantRef}-${payload.period.start}`
+    const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const idemKey = `summary-${payload.merchantRef}-${id}`
     const run = await api.triggerSummary(payload.merchantRef, payload.period, idemKey)
     while (true) {
       const status = await api.getRunStatus(payload.merchantRef, run.run_id)

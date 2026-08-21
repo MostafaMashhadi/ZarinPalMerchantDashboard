@@ -103,6 +103,40 @@ export interface RunCostDTO {
   cost_usd: number
 }
 
+export type ChatRole = 'user' | 'assistant'
+export type ChatDeliveryMode = 'streaming' | 'buffered'
+
+export interface ChatSessionDTO {
+  id: string
+  status: string
+  started_at: string
+  last_activity_at: string
+}
+
+export interface ChatMessageDTO {
+  id: string
+  session_id: string
+  role: ChatRole
+  content: string
+  referenced_insight_ids: string[]
+  created_at: string
+  delivery_mode?: ChatDeliveryMode
+  data_freshness?: Freshness
+}
+
+export interface CostScopeSummary {
+  scope: 'agent' | 'chat'
+  tokens_in: number
+  tokens_out: number
+  cost_usd: number
+  runs: number
+}
+
+export interface CostDashboardDTO {
+  realtime: CostScopeSummary[]
+  historical: Array<CostScopeSummary & { date: string; merchant_ref: string }>
+}
+
 export type NotificationSeverity = 'info' | 'warning' | 'critical'
 
 export interface NotificationDTO {

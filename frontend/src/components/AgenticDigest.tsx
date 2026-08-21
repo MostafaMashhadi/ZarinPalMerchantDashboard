@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Sparkles, RefreshCw, ChevronDown, Wind, CheckCircle2, AlertTriangle, Coins, Clock3 } from 'lucide-react'
+import { Sparkles, RefreshCw, ChevronDown, Wind, CheckCircle2, AlertTriangle, Clock3 } from 'lucide-react'
 import type { RootState, AppDispatch } from '../store/store'
 import { startSummary, fetchRunCost } from '../store/agentSlice'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import api from '../services/api'
 import type { InsightDTO } from '../services/types'
 import { cn } from '@/lib/utils'
+import CostBreakdown from './CostBreakdown'
+import InsightCard from './InsightCard'
 
 /* ── Priority badge styling – ZarinPal palette ─────────────────── */
 const PRIORITY_CHIP: Record<string, string> = {
@@ -25,6 +27,12 @@ const CHECKPOINT_LABEL: Record<string, string> = {
   draft_narrative:          'نگارش روایت (مدل زبانی)',
   validate_against_data:    'اعتبارسنجی اعداد با داده',
   publish_insight:          'انتشار بینش',
+}
+
+const merchantFacingFailure = (error?: string | null) => {
+  if (error?.includes('AllProvidersExhausted')) return 'در حال حاضر امکان تولید خلاصه وجود ندارد؛ لطفاً کمی بعد دوباره تلاش کنید.'
+  if (error?.includes('cost-ceiling') || error?.includes('COST_CEILING')) return 'تولید خلاصه به سقف هزینه مجاز رسید؛ تنظیمات خود را بررسی کنید.'
+  return 'تولید خلاصه کامل نشد؛ لطفاً دوباره تلاش کنید.'
 }
 
 const AgenticDigest: React.FC = () => {
@@ -134,24 +142,19 @@ const AgenticDigest: React.FC = () => {
       {!generating && run?.status === 'failed' && (
         <div className="flex items-center gap-3 border-t border-destructive/20 bg-destructive/5 px-6 py-4 text-sm text-destructive">
           <AlertTriangle className="size-4 shrink-0" />
-          <span className="font-bold">{run.error ?? 'شکست در تولید خلاصه — دوباره تلاش کنید'}</span>
+          <span className="font-bold">{merchantFacingFailure(run.error)}</span>
         </div>
       )}
 
       {/* ── Completed digest ── */}
       {!generating && run?.status === 'completed' && digest && (
-        <div className="border-t border-border/50">
-          <div className="p-6">
+        <div className="border-t border-border/50 p-6">
+          <InsightCard insight={digest}>
             {/* Headline + meta */}
             <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
               <h3 className="text-lg font-black text-foreground leading-snug">{digest.headline}</h3>
               <div className="flex flex-wrap items-center gap-2">
-                {cost && (
-                  <span className="badge-green flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold tabular-nums">
-                    <Coins className="size-3.5" />
-                    هزینه: {cost.cost_usd.toFixed(4)} USD
-                  </span>
-                )}
+                {cost && <CostBreakdown cost={cost} scope="agent" />}
                 <Badge
                   variant="outline"
                   className="badge-navy rounded-full text-[10px] font-bold px-2.5 py-0.5"
@@ -189,8 +192,6 @@ const AgenticDigest: React.FC = () => {
                 ))}
               </div>
             </div>
-          </div>
-
           {/* "See the data" expandable row */}
           <button
             type="button"
@@ -218,6 +219,7 @@ const AgenticDigest: React.FC = () => {
               </div>
             </div>
           )}
+          </InsightCard>
         </div>
       )}
 

@@ -19,19 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-
-const SEVERITY_LABEL: Record<string, string> = {
-  critical: 'بحرانی',
-  warning:  'هشدار',
-  info:     'اطلاع',
-}
-
-/* Map severity to ZarinPal palette */
-const SEVERITY_BADGE: Record<string, string> = {
-  critical: 'bg-red-50 text-red-700 border border-red-200',
-  warning:  'bg-amber-50 text-amber-700 border border-amber-200',
-  info:     'badge-green',
-}
+import { severityPresentation } from '@/lib/severity'
 
 const NotificationBell: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -112,7 +100,7 @@ const NotificationBell: React.FC = () => {
         <div className="custom-scrollbar max-h-80 overflow-y-auto space-y-0.5">
           {items.map((item) => {
             const isUnread = item.read_at === null
-            const badgeClass = SEVERITY_BADGE[item.severity] ?? 'badge-green'
+            const severity = severityPresentation[item.severity]
 
             return (
               <DropdownMenuItem
@@ -134,10 +122,10 @@ const NotificationBell: React.FC = () => {
                 <span
                   className={cn(
                     'mt-0.5 flex h-7 w-12 shrink-0 items-center justify-center rounded-lg text-[9px] font-black',
-                    badgeClass,
+                    severity.className,
                   )}
                 >
-                  {SEVERITY_LABEL[item.severity] ?? item.severity}
+                  {severity.label}
                 </span>
 
                 {/* Content */}

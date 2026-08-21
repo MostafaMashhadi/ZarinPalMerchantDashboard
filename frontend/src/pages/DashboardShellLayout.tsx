@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import type { RootState, AppDispatch } from '../store/store'
 import { fetchDashboardSummary, setActiveTab } from '../store/dashboardSlice'
 import { setDataFreshness } from '../store/uiSlice'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import DegradedDataBadge from '../components/DegradedDataBadge'
 import SidebarNav from '../components/SidebarNav'
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
 import { MessageSquareDashed } from 'lucide-react'
+import ChatPanel from '../components/ChatPanel'
 
 const DashboardShellLayout: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -21,6 +22,7 @@ const DashboardShellLayout: React.FC = () => {
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
   const { selectedMerchant, activeTab, degraded } = useSelector((state: RootState) => state.dashboard)
   const dataFreshness = useSelector((state: RootState) => state.ui.dataFreshness)
+  const [chatOpen, setChatOpen] = useState(false)
 
   useEffect(() => {
     const derived = ({ '/dashboard': 'overview', '/insights': 'insights', '/analyses': 'analyses', '/ops/cost': 'ops' } as Record<string, string>)[location.pathname]
@@ -65,7 +67,7 @@ const DashboardShellLayout: React.FC = () => {
               <p className="text-xs text-muted-foreground">{selectedMerchant}</p>
               <h1 className="truncate text-base font-semibold">Dashboard</h1>
             </div>
-            <Button variant="outline" size="sm" disabled aria-label="گفتگوی هوشمند در اسپرینت ۳ فعال می‌شود">
+            <Button variant="outline" size="sm" onClick={() => setChatOpen(true)} aria-label="باز کردن گفتگوی هوشمند">
               <MessageSquareDashed data-icon="inline-start" aria-hidden="true" />
               گفتگوی هوشمند
             </Button>
@@ -90,6 +92,7 @@ const DashboardShellLayout: React.FC = () => {
               </div>
             </div>
           </footer>
+          <ChatPanel open={chatOpen} onOpenChange={setChatOpen} merchantRef={selectedMerchant} />
         </SidebarInset>
       </div>
     </SidebarProvider>

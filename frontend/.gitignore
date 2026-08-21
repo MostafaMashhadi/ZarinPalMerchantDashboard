@@ -1,0 +1,55 @@
+# Dependencies
+node_modules
+
+# Build outputs
+dist
+dist-ssr
+*.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Agent and AI coding tool configs
+.agents/
+.aider/
+.codex/
+.cursorrules
+.impeccable/
+.lovable
+.nanocoder/
+.opencode/
+.windsurfrules
+AGENTS.md
+CLAUDE.md
+
+# Skills and design skill locks
+skills-src
+skills-lock.json
+
+# Backend / deployment (not needed to run the frontend)
+backend-tests/
+server.py
+docker-compose.yml
+Dockerfile
+nginx.conf
+
+# Test runners / configs not required for app execution
+tests/
+playwright.config.ts

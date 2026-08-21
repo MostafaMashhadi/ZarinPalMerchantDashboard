@@ -1,0 +1,24 @@
+[tool.pytest.ini_options]
+testpaths = ["tests", "api/tests"]
+pythonpath = [".", "shared", "api"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["staticfiles", "merchants/migrations", "analytics/migrations", ".venv"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "RUF", # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+"api/config/settings/*" = ["F403", "F405"]

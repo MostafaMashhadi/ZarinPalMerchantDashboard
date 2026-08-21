@@ -2,10 +2,11 @@ import React, { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronDown, ChevronUp, FileCode2, Database, AlertTriangle } from 'lucide-react'
+import { ChevronDown, ChevronUp, Database, AlertTriangle } from 'lucide-react'
 import type { InsightDTO, InsightKind, ProvenanceEntry } from '../services/types'
 import { KIND_LABEL } from '../services/types'
 import { cn } from '@/lib/utils'
+import ProvenanceView from './ProvenanceView'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -37,7 +38,6 @@ interface InsightCardProps {
 
 const InsightCard: React.FC<InsightCardProps> = ({ insight, provenance, children, extraActions }) => {
   const [showChart, setShowChart] = useState(false)
-  const [showProvenance, setShowProvenance] = useState(false)
 
   const severityChip = insight.body.severity ? SEVERITY_CHIPS[insight.body.severity] : null
 
@@ -85,17 +85,6 @@ const InsightCard: React.FC<InsightCardProps> = ({ insight, provenance, children
             {showChart ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
             {showChart ? 'مخفی کردن داده‌ها' : 'مشاهده داده‌ها'}
           </Button>
-          {provenance && provenance.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => setShowProvenance((s) => !s)}
-            >
-              <FileCode2 className="size-3.5" />
-              {showProvenance ? 'مخفی کردن منشأ' : 'مشاهده منشأ (Provenance)'}
-            </Button>
-          )}
         </div>
 
         {showChart && (
@@ -121,32 +110,7 @@ const InsightCard: React.FC<InsightCardProps> = ({ insight, provenance, children
           </div>
         )}
 
-        {showProvenance && provenance && provenance.length > 0 && (
-          <div className="animate-fade-in rounded-xl border border-border/40 bg-muted/20 p-4">
-            <div className="mb-3 text-xs font-bold text-muted-foreground">ردیابی منشأ</div>
-            <ol className="space-y-3">
-              {provenance.map((entry) => (
-                <li key={entry.sequence} className="rounded-lg border border-border/40 bg-white/60 p-3">
-                  <div className="flex items-center gap-2 text-xs font-bold mb-2">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
-                      {entry.sequence + 1}
-                    </span>
-                    {entry.source_query_id}
-                  </div>
-                  <details className="mt-2">
-                    <summary className="flex cursor-pointer items-center gap-2 text-[11px] font-bold text-muted-foreground hover:text-foreground">
-                      <FileCode2 className="size-3.5" />
-                      مشاهده SQL
-                    </summary>
-                    <pre dir="ltr" className="mt-2 overflow-x-auto rounded-lg bg-foreground/[0.04] p-3 font-mono text-[10px] leading-relaxed text-foreground/80">
-                      {entry.clickhouse_sql}
-                    </pre>
-                  </details>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
+        {provenance && <ProvenanceView rows={provenance} />}
       </CardContent>
     </Card>
   )

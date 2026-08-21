@@ -6,22 +6,15 @@ import InsightsListPage from '../pages/InsightsListPage'
 import InsightDetailPage from '../pages/InsightDetailPage'
 import AnalysesPage from '../pages/AnalysesPage'
 import OpsCostPage from '../pages/OpsCostPage'
-import HomePage from '../pages/HomePage'
 
 export const router = createBrowserRouter([
-  { path: '/', element: <HomePage /> },
   { path: '/login', element: <LoginPage /> },
-  {
-    path: '/dashboard',
-    element: <DashboardShellLayout />,
-    children: [
-      { index: true, element: <DashboardSummaryPage /> },
-    ],
-  },
   {
     path: '/',
     element: <DashboardShellLayout />,
     children: [
+      { index: true, element: <DashboardSummaryPage /> },
+      { path: 'dashboard', element: <DashboardSummaryPage /> },
       { path: 'insights', element: <InsightsListPage /> },
       { path: 'insights/:insightId', element: <InsightDetailPage /> },
       { path: 'analyses', element: <AnalysesPage /> },

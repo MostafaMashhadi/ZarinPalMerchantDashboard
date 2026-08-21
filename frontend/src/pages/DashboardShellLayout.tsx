@@ -11,6 +11,8 @@ import {
   Sidebar,
   SidebarInset,
 } from '@/components/ui/sidebar'
+import { Button } from '@/components/ui/button'
+import { MessageSquareDashed } from 'lucide-react'
 
 const DashboardShellLayout: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -58,6 +60,16 @@ const DashboardShellLayout: React.FC = () => {
 
         {/* ── Main Content ── */}
         <SidebarInset className="bg-transparent">
+          <header className="flex items-center justify-between gap-4 border-b border-border/70 px-4 py-3 lg:px-8" dir="rtl">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">{selectedMerchant}</p>
+              <h1 className="truncate text-base font-semibold">Dashboard</h1>
+            </div>
+            <Button variant="outline" size="sm" disabled aria-label="گفتگوی هوشمند در اسپرینت ۳ فعال می‌شود">
+              <MessageSquareDashed data-icon="inline-start" aria-hidden="true" />
+              گفتگوی هوشمند
+            </Button>
+          </header>
           <main className="relative mx-auto w-full flex-1 space-y-6 px-4 py-7 lg:space-y-7 lg:px-8 lg:py-9">
             {(degraded || dataFreshness === 'cached_fallback') && <DegradedDataBadge />}
             <Outlet />

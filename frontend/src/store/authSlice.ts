@@ -57,7 +57,7 @@ const authSlice = createSlice({
         const isLocked = (err instanceof ApiError && err.status === 423) || err.message?.includes('LOCKED')
         const isRateLimited = (err instanceof ApiError && err.code === 'RATE_LIMITED') || err.message?.includes('محدودیت نرخ')
         if (isLocked) {
-          state.loginError = err.message ?? 'حساب شما قفل شده است'
+          state.loginError = 'ورود موقتاً برای حفظ امنیت محدود شده است. لطفاً بعداً دوباره تلاش کنید.'
           state.lockoutRetryAfter = (err instanceof ApiError ? err.retryAfterSeconds : undefined) ?? 60
         } else if (isRateLimited) {
           state.loginError = 'محدودیت نرخ — کمی بعد دوباره تلاش کنید'

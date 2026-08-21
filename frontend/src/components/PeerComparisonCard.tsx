@@ -17,13 +17,19 @@ const PeerComparisonCard: React.FC<PeerComparisonCardProps> = ({ insight, proven
     <InsightCard insight={insight} provenance={provenance}>
       <div className="rounded-xl border border-border/40 bg-muted/20 p-4">
         <div className="text-xs font-bold text-muted-foreground mb-2">موقعیت شما در دهک حجمی هم‌صنفی‌ها</div>
-        <div className="flex items-end gap-3">
-          <div className="text-3xl font-black tabular-nums">{percentile.toLocaleString('fa-IR')}٪</div>
-          <div className="text-xs text-muted-foreground mb-1">بیشتر از هم‌صنفی‌های خود</div>
-        </div>
-        <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
-          <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${Math.min(100, percentile)}%` }} />
-        </div>
+        {isLowConfidence ? (
+          <p className="text-sm leading-6 text-muted-foreground">داده‌ی هم‌صنف کافی برای اعلام رتبه دقیق وجود ندارد؛ این مقایسه فقط به‌عنوان جهت روند قابل استفاده است.</p>
+        ) : (
+          <>
+            <div className="flex items-end gap-3">
+              <div className="text-3xl font-black tabular-nums">{percentile.toLocaleString('fa-IR')}٪</div>
+              <div className="text-xs text-muted-foreground mb-1">بیشتر از هم‌صنفی‌های خود</div>
+            </div>
+            <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${Math.min(100, percentile)}%` }} />
+            </div>
+          </>
+        )}
       </div>
       {isLowConfidence && (
         <div className="flex items-start gap-2 rounded-xl border border-gold/30 bg-gold/5 px-3 py-2.5 text-xs font-bold text-gold-deep">

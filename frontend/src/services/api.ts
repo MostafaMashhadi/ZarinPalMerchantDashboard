@@ -12,6 +12,8 @@ import type {
   ProvenanceEntry,
   RunCostDTO,
 } from './types'
+import { tokenStorage } from '@/auth/tokenStorage'
+import { refreshAccessToken } from '@/auth/refreshInterceptor'
 
 /** Set VITE_API_BASE_URL to the DRF origin (e.g. http://localhost:8000).
  *  Set VITE_USE_MOCK=false to talk to the real backend once it is up. */
@@ -30,33 +32,18 @@ export class ApiError extends Error {
   }
 }
 
-/** Access token is stored in memory only (lost on refresh → forces re-login).
- *  Refresh token is persisted in localStorage to enable the silent-refresh interceptor.
- *  This is a common security trade-off: short-lived access tokens can't be stolen
- *  from persistent storage, while the refresh token enables seamless re-auth. */
-let accessToken: string | null = null
-let refreshToken: string | null = localStorage.getItem('zp_refresh')
-
-const TOKEN_KEYS = { access: 'zp_access', refresh: 'zp_refresh' }
-
 export function setTokens(tokens: AuthTokens | null) {
-  accessToken = tokens?.access ?? null
-  refreshToken = tokens?.refresh ?? null
-  if (tokens) {
-    localStorage.setItem(TOKEN_KEYS.refresh, tokens.refresh)
-  } else {
-    localStorage.removeItem(TOKEN_KEYS.refresh)
-  }
+  if (tokens) tokenStorage.set(tokens)
+  else tokenStorage.clear()
 }
 
 export async function hydrateTokensFromStorage() {
-  refreshToken = localStorage.getItem(TOKEN_KEYS.refresh)
-  if (refreshToken && !accessToken) {
-    await refreshAccessToken()
+  if (tokenStorage.getRefreshToken() && !tokenStorage.getAccessToken()) {
+    await refreshAccessToken(API_BASE)
   }
 }
 
-export const isAuthenticated = () => Boolean(accessToken || refreshToken)
+export const isAuthenticated = () => Boolean(tokenStorage.getAccessToken() || tokenStorage.getRefreshToken())
 
 async function request<T>(
   path: string,
@@ -64,6 +51,7 @@ async function request<T>(
 ): Promise<T> {
   const { method = 'GET', body, idempotencyKey, retry = true } = options
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const accessToken = tokenStorage.getAccessToken()
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey
 
@@ -74,12 +62,9 @@ async function request<T>(
   })
 
   // 401 → try a single refresh, then replay the original request once.
-  if (resp.status === 401 && retry && refreshToken && !path.startsWith('/auth/')) {
-    const refreshed = await refreshAccessToken()
+  if (resp.status === 401 && retry && tokenStorage.getRefreshToken() && !path.startsWith('/auth/')) {
+    const refreshed = await refreshAccessToken(API_BASE)
     if (refreshed) return request<T>(path, { ...options, retry: false })
-    // refresh failed → force logout
-    setTokens(null)
-    window.dispatchEvent(new CustomEvent('auth:logout'))
     throw new ApiError(401, 'AUTH_EXPIRED', 'نشست شما منقضی شده است')
   }
 
@@ -104,26 +89,6 @@ async function request<T>(
   }
 
   return data as T
-}
-
-async function refreshAccessToken(): Promise<boolean> {
-  if (!refreshToken) return false
-  try {
-    const resp = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh: refreshToken }),
-    })
-    if (!resp.ok) {
-      setTokens(null)
-      return false
-    }
-    const data = (await resp.json()) as { access: string }
-    setTokens({ access: data.access, refresh: refreshToken })
-    return true
-  } catch {
-    return false
-  }
 }
 
 /** Path here is the sub-path under /auth (login|refresh|logout). */
@@ -199,4 +164,4 @@ export const api = {
 }
 
 export default api
-export { API_BASE, accessToken, refreshToken }
+export { API_BASE }

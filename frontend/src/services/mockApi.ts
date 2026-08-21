@@ -153,6 +153,7 @@ export const mockApi: MockApi = {
       query_params: { merchant_key: 'M18', start: iso(30), end: iso(0) },
       computed_at: iso(0),
       result_summary: { gross_volume: 426_000_000, rows: 1 },
+      ingest_batch_id: `batch-${insightId}-${idx + 1}`,
     }))
   },
 

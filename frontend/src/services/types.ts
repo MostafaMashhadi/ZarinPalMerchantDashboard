@@ -79,6 +79,7 @@ export interface ProvenanceEntry {
   query_params: Record<string, unknown>
   computed_at: string
   result_summary: Record<string, unknown>
+  ingest_batch_id?: string | null
 }
 
 export type RunStatus = 'running' | 'completed' | 'failed'

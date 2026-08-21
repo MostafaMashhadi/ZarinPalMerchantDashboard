@@ -2,6 +2,15 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Authentication storage
+
+`src/auth/tokenStorage.ts` keeps the short-lived access token only in module
+memory. The refresh token is stored under `zp_refresh` in `localStorage` so a
+session can silently resume after a browser reload. On a 401, the API client
+uses `src/auth/refreshInterceptor.ts` to call `/api/v1/auth/refresh` once and
+replay the original request once. If refreshing fails, both tokens are cleared
+and the user is sent to `/login`.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)

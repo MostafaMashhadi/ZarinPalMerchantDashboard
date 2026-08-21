@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Lightbulb, ArrowLeft, FileCode2, Database, Layers, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { Lightbulb, ArrowLeft, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
 import type { RootState, AppDispatch } from '../store/store'
 import { fetchInsights, fetchInsightDetail, setKindFilter, setPage, clearDetail } from '../store/insightsSlice'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { KINDS } from '../services/types'
 import type { InsightKind, InsightDTO, ProvenanceEntry } from '../services/types'
@@ -13,6 +12,7 @@ import EventImpactCard from './EventImpactCard'
 import CohortRetentionCard from './CohortRetentionCard'
 import AnomalyDetectionCard from './AnomalyDetectionCard'
 import PeerComparisonCard from './PeerComparisonCard'
+import ProvenanceView from './ProvenanceView'
 
 const PAGE_WINDOW = 3
 
@@ -61,11 +61,6 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ preselectedId }) => {
     dispatch(fetchInsightDetail({ merchantRef, insightId: id }))
   }
 
-  const isoDate = (s: string) => {
-    const d = new Date(s)
-    return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString('fa-IR')
-  }
-
   /* ------------------------------ DETAIL VIEW ------------------------------ */
   if (selectedId && detail) {
     const SpecificCard = CARD_COMPONENTS[detail.kind] ?? InsightCard
@@ -97,54 +92,7 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ preselectedId }) => {
 
         <SpecificCard insight={detail} provenance={provenance ?? []} />
 
-        {/* Provenance — plain-language + SQL, in sequence order */}
-        {provenance && provenance.length > 0 && (
-          <div className="rounded-2xl border border-border/40 bg-white/70 p-6 backdrop-blur-sm">
-            <div className="mb-1 flex items-center gap-2.5 text-base font-bold text-foreground">
-               <Layers className="size-[18px] text-primary" />
-              ردیابی منشأ (Provenance) — این بینش چگونه محاسبه شد؟
-            </div>
-            <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
-              هر عدد بر اساس کوئری‌های قابل تکرار روی تپل‌های روزانه ClickHouse ساخته شده است.
-            </p>
-            <ol className="space-y-4">
-              {provenance.map((entry) => (
-                <li key={entry.sequence} className="rounded-xl border border-border/40 bg-muted/20 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5 text-sm font-bold">
-                      <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-black text-primary">
-                        {entry.sequence + 1}
-                      </span>
-                      {entry.source_query_id}
-                    </div>
-                    <Badge variant="outline" className="text-[10px] font-bold text-muted-foreground">
-                      محاسبه: {isoDate(entry.computed_at)}
-                    </Badge>
-                  </div>
-
-                  <details className="mt-3">
-                    <summary className="flex cursor-pointer items-center gap-2 text-xs font-bold text-muted-foreground transition-colors hover:text-foreground">
-                      <FileCode2 className="size-3.5" />
-                      مشاهده SQL
-                    </summary>
-                    <pre dir="ltr" className="mt-2 overflow-x-auto rounded-lg bg-foreground/[0.04] p-3 font-mono text-[11px] leading-relaxed text-foreground/80">
-                      {entry.clickhouse_sql}
-                    </pre>
-                  </details>
-
-                  {Object.keys(entry.result_summary).length > 0 && (
-                    <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
-                      <Database className="size-3.5" />
-                      {Object.entries(entry.result_summary)
-                        .map(([k, v]) => `${k}: ${String(v)}`)
-                        .join(' · ')}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
+        {provenance && <ProvenanceView rows={provenance} title="مشاهده کوئری و منشأ داده" />}
       </section>
     )
   }

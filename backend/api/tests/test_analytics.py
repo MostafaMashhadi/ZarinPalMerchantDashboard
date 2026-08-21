@@ -7,6 +7,8 @@ from uuid import uuid4
 import pytest
 from shared.dtos import AnalysisParams, AnalysisResult, ProvenanceSpec
 
+from analytics.strategies.cohort_retention import CohortRetentionAnalysisStrategy
+from analytics.strategies.event_impact import EventImpactAnalysisStrategy
 from analytics.strategies.peer_comparison import PeerComparisonAnalysisStrategy
 from analytics.strategies.time_range import TimeRangeAnalysisStrategy
 from analytics.strategy_factory import AnalysisStrategyFactory
@@ -373,6 +375,18 @@ class TestAnalysisStrategyFactory:
 
         assert isinstance(strategy, PeerComparisonAnalysisStrategy)
 
+    def test_create_event_impact_strategy(self):
+        factory = AnalysisStrategyFactory()
+        strategy = factory.create("event_impact")
+
+        assert isinstance(strategy, EventImpactAnalysisStrategy)
+
+    def test_create_cohort_retention_strategy(self):
+        factory = AnalysisStrategyFactory()
+        strategy = factory.create("cohort_retention")
+
+        assert isinstance(strategy, CohortRetentionAnalysisStrategy)
+
     def test_create_unknown_kind_raises(self):
         factory = AnalysisStrategyFactory()
         with pytest.raises(ValueError, match="Unknown analysis kind: unknown_kind"):
@@ -383,7 +397,7 @@ class TestAnalysisStrategyFactory:
         with pytest.raises(
             NotImplementedError, match="not yet implemented"
         ):
-            factory.create("cohort_retention")
+            factory.create("anomaly_detection")
 
     def test_factory_creates_fresh_instances(self):
         factory = AnalysisStrategyFactory()
@@ -391,3 +405,225 @@ class TestAnalysisStrategyFactory:
         s2 = factory.create("time_range")
 
         assert s1 is not s2
+
+
+class TestEventImpactAnalysisStrategy:
+    def test_compute_returns_analysis_result(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_events_in_range.return_value = [
+            {
+                "event_key": "nowruz2026",
+                "title": "Nowruz 2026",
+                "start_date": "2026-03-20",
+                "end_date": "2026-03-25",
+                "event_type": "promotion",
+            }
+        ]
+        mock_repo._resolve_merchant.return_value = MagicMock(
+            merchant_key="M_TEST",
+            category=MagicMock(category_key="retail"),
+        )
+        mock_repo.get_merchant_gross_volume.side_effect = [10_000_000, 8_000_000]
+        mock_repo.get_category_gross_volume.side_effect = [100_000_000, 90_000_000]
+
+        strategy = EventImpactAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert isinstance(result, AnalysisResult)
+        assert result.kind == "event_impact"
+        assert result.merchant_id == merchant_id
+        assert result.body["event_key"] == "nowruz2026"
+        assert result.body["merchant_event_volume"] == 10_000_000
+        assert result.body["merchant_control_volume"] == 8_000_000
+        assert result.body["category_event_volume"] == 100_000_000
+        assert result.body["category_control_volume"] == 90_000_000
+        assert result.body["merchant_delta"] == 2_000_000
+        assert result.body["category_delta"] == 10_000_000
+        assert result.body["diff_in_diff"] == -8_000_000
+        assert "control_window_quality" in result.body
+
+    def test_compute_no_events_returns_empty(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_events_in_range.return_value = []
+
+        strategy = EventImpactAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert result.kind == "event_impact"
+        assert result.body["events_found"] == 0 or result.body.get("events_found", 1) == 0
+        assert len(result.headline) > 0
+
+    def test_required_provenance_returns_exactly_two_specs(self):
+        strategy = EventImpactAnalysisStrategy()
+        provenance = strategy.required_provenance()
+
+        assert len(provenance) == 2
+        assert all(isinstance(p, ProvenanceSpec) for p in provenance)
+        assert provenance[0].source_query_id == "ch.tx_daily_rollup.event_window"
+        assert provenance[1].source_query_id == "ch.tx_daily_rollup.control_window"
+
+    def test_control_window_yearly_fallback(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_events_in_range.return_value = [
+            {
+                "event_key": "event1",
+                "title": "Test Event",
+                "start_date": "2026-03-20",
+                "end_date": "2026-03-25",
+                "event_type": "promotion",
+            }
+        ]
+        mock_repo.get_events_in_range.side_effect = [
+            [
+                {
+                    "event_key": "event1",
+                    "title": "Test Event",
+                    "start_date": "2026-03-20",
+                    "end_date": "2026-03-25",
+                    "event_type": "promotion",
+                }
+            ],
+            [
+                {
+                    "event_key": "prev",
+                    "title": "Prev",
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-03-25",
+                    "event_type": "other",
+                }
+            ],
+        ]
+        mock_repo._resolve_merchant.return_value = MagicMock(
+            merchant_key="M_TEST",
+            category=MagicMock(category_key="retail"),
+        )
+        mock_repo.get_merchant_gross_volume.side_effect = [5_000_000, 4_000_000]
+        mock_repo.get_category_gross_volume.side_effect = [50_000_000, 40_000_000]
+
+        strategy = EventImpactAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert "control_window_quality" in result.body
+
+
+class TestCohortRetentionAnalysisStrategy:
+    def test_compute_returns_analysis_result(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_cohort_retention.return_value = [
+            {
+                "bucket": "2026-01-04",
+                "verify_type": "Automated",
+                "retained_users": 80,
+                "cohort_size": 100,
+            },
+            {
+                "bucket": "2026-01-11",
+                "verify_type": "Automated",
+                "retained_users": 60,
+                "cohort_size": 100,
+            },
+            {
+                "bucket": "2026-01-04",
+                "verify_type": "Manual",
+                "retained_users": 20,
+                "cohort_size": 100,
+            },
+        ]
+
+        strategy = CohortRetentionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert isinstance(result, AnalysisResult)
+        assert result.kind == "cohort_retention"
+        assert result.merchant_id == merchant_id
+        assert result.body["cohort_size"] == 100
+        assert result.body["granularity"] == "week"
+        assert len(result.series) == 3
+        assert result.series[0]["verify_type"] == "Automated"
+        assert result.series[0]["retention_rate"] == 0.8
+        assert result.series[1]["retention_rate"] == 0.6
+        assert result.series[2]["retention_rate"] == 0.2
+
+    def test_compute_empty_cohort(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_cohort_retention.return_value = []
+
+        strategy = CohortRetentionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert result.kind == "cohort_retention"
+        assert result.body["cohort_size"] == 0
+        assert len(result.series) == 0
+
+    def test_compute_segments_by_verify_type(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_cohort_retention.return_value = [
+            {
+                "bucket": "2026-01-04",
+                "verify_type": "Automated",
+                "retained_users": 80,
+                "cohort_size": 100,
+            },
+            {
+                "bucket": "2026-01-04",
+                "verify_type": "Manual",
+                "retained_users": 10,
+                "cohort_size": 100,
+            },
+        ]
+
+        strategy = CohortRetentionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(period_start=start, period_end=end)
+
+        result = strategy.compute(merchant_id, params)
+
+        assert "Automated" in result.body["segments"]
+        assert "Manual" in result.body["segments"]
+
+    def test_required_provenance_returns_exactly_two_specs(self):
+        strategy = CohortRetentionAnalysisStrategy()
+        provenance = strategy.required_provenance()
+
+        assert len(provenance) == 2
+        assert all(isinstance(p, ProvenanceSpec) for p in provenance)
+        assert provenance[0].source_query_id == "ch.tx_raw.cohort_definition"
+        assert provenance[1].source_query_id == "ch.tx_raw.cohort_retention_curve"
+
+    def test_compute_granularity_month(self, merchant_id, fixed_period):
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_cohort_retention.return_value = [
+            {
+                "bucket": "2026-01-01",
+                "verify_type": "Automated",
+                "retained_users": 50,
+                "cohort_size": 100,
+            },
+        ]
+
+        strategy = CohortRetentionAnalysisStrategy(repo=mock_repo)
+        params = AnalysisParams(
+            period_start=start,
+            period_end=end,
+            extra={"granularity": "month"},
+        )
+
+        result = strategy.compute(merchant_id, params)
+
+        assert result.body["granularity"] == "month"

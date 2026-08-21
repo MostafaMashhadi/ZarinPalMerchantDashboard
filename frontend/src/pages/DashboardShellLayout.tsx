@@ -10,11 +10,12 @@ import {
   SidebarProvider,
   Sidebar,
   SidebarInset,
+  SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
 import { MessageCircle, Sparkles } from 'lucide-react'
 import ChatPanel from '../components/ChatPanel'
-
+import SidebarToggleIcon from '../components/SidebarToggleIcon'
 const DashboardShellLayout: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
@@ -54,31 +55,40 @@ const DashboardShellLayout: React.FC = () => {
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="app-backdrop flex min-h-dvh w-full text-foreground" dir="rtl">
+      <div className="app-backdrop flex min-h-dvh w-full overflow-x-clip text-foreground" dir="rtl">
         {/* ── Sidebar ── */}
-        <Sidebar side="right" variant="floating" collapsible="icon" className="border-e border-sidebar-border">
+        <Sidebar side="right" variant="sidebar" collapsible="icon" className="border-s border-sidebar-border">
           <SidebarNav />
         </Sidebar>
 
         {/* ── Main Content ── */}
-        <SidebarInset className="bg-transparent">
-          <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-border/70 bg-white/85 px-4 py-3 backdrop-blur-xl lg:px-8" dir="rtl">
-            <div className="min-w-0">
+        <SidebarInset className="min-w-0 bg-transparent">
+          <header className="dashboard-header sticky top-0 z-20 flex min-h-16 items-center justify-between gap-3 border-b border-border/70 px-3 py-2 sm:px-4 lg:px-8" dir="rtl">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <SidebarTrigger
+                aria-label="باز یا بستن منو"
+                title="باز یا بستن منو (Ctrl+B)"
+                className="size-11 shrink-0 rounded-xl border border-border/80 bg-white/70 text-foreground shadow-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                <SidebarToggleIcon className="size-5" />
+              </SidebarTrigger>
+              <div className="min-w-0">
               <p className="text-xs text-muted-foreground">زرین‌پال من · {selectedMerchant}</p>
               <h1 className="truncate text-base font-bold">سلام، خوش آمدید</h1>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
               <span className="hidden rounded-full bg-primary/10 px-3 py-1.5 font-semibold text-primary sm:inline">حساب فعال</span>
               <span className="size-2 rounded-full bg-primary" aria-label="سرویس فعال" />
             </div>
           </header>
-          <main className="relative mx-auto w-full flex-1 space-y-6 px-4 py-7 lg:space-y-7 lg:px-8 lg:py-9">
+          <main className="relative mx-auto flex w-full min-w-0 flex-1 flex-col gap-6 px-3 py-6 sm:px-4 sm:py-7 lg:gap-7 lg:px-8 lg:py-9">
             {(degraded || dataFreshness === 'cached_fallback') && <DegradedDataBadge />}
             <Outlet />
           </main>
 
-          <footer className="relative border-t border-border/50 bg-white/65 px-4 py-4 backdrop-blur-sm" dir="rtl">
-            <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 sm:flex-row">
+          <footer className="relative border-t border-border/50 bg-white/65 px-3 py-4 backdrop-blur-sm sm:px-4" dir="rtl">
+            <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 text-center sm:flex-row sm:text-start">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="hidden sm:inline text-muted-foreground/55">
                   آخرین بروزرسانی: {new Date().toLocaleTimeString('fa-IR')}

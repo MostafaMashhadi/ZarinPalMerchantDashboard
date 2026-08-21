@@ -130,6 +130,19 @@
   --sidebar-ring:           #21aa58;
 }
 
+@font-face {
+  font-family: 'Zarinpal Yekan';
+  src: url('https://cdn.zarinpal.com/frontend-assets/fonts/IRANYekanXVFaNumVF.woff') format('woff-variations');
+  font-weight: 100 1000;
+  font-style: normal;
+  font-display: swap;
+}
+
+.zarinpal-sidebar,
+.zarinpal-sidebar-popover {
+  font-family: 'Zarinpal Yekan', Tahoma, sans-serif;
+}
+
 /* ─── Base ────────────────────────────────────────────────────── */
 @layer base {
   * { @apply border-border outline-ring/50; }
@@ -428,6 +441,32 @@ html { scrollbar-width: none; }
 [data-sidebar="sidebar"] {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+}
+
+/* The header and desktop sidebar share one surface edge; the inset starts
+   immediately after the sidebar gap, so both remain aligned while resizing. */
+.dashboard-header {
+  background: color-mix(in srgb, white 88%, var(--background));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+[data-slot="sidebar-container"] {
+  transition-duration: 220ms;
+  transition-timing-function: var(--ease-out);
+}
+
+[data-slot="sidebar-gap"] {
+  transition-duration: 220ms;
+  transition-timing-function: var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="sidebar-container"],
+  [data-slot="sidebar-gap"],
+  [data-sidebar="menu-button"] {
+    transition-duration: 1ms !important;
+  }
 }
 
 /* ─── Numeric Typography ─────────────────────────────────────── */

@@ -10,6 +10,11 @@ env = environ.Env(
     DJANGO_DEBUG=(bool, False),
     DJANGO_ALLOWED_HOSTS=(list, []),
     CORS_ALLOWED_ORIGIN=(list, []),
+    JWT_ACCESS_TTL_SECONDS=(int, 900),
+    JWT_REFRESH_TTL_SECONDS=(int, 1_209_600),
+    REDIS_PORT=(int, 6379),
+    CLICKHOUSE_HTTP_PORT=(int, 8123),
+    CLICKHOUSE_NATIVE_PORT=(int, 9000),
 )
 
 # Repo-root .env for local runs; no-op when absent (compose injects env vars).
@@ -44,6 +49,10 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Edge-layer: rate limiting (§13, §19.22) — before controllers
+    "middlewares.rate_limiter.RateLimitMiddleware",
+    # Edge-layer: JWT authentication — resolves principal for AuthZ (§13)
+    "middlewares.auth.JwtAuthenticationMiddleware",
 ]
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGIN")
@@ -79,8 +88,23 @@ DATABASES = {
     }
 }
 
+JWT_ACCESS_SECRET = env("JWT_ACCESS_SECRET")
+JWT_REFRESH_SECRET = env("JWT_REFRESH_SECRET")
+JWT_ACCESS_TTL_SECONDS = env("JWT_ACCESS_TTL_SECONDS")
+JWT_REFRESH_TTL_SECONDS = env("JWT_REFRESH_TTL_SECONDS")
+
+REDIS_HOST = env("REDIS_HOST", default="")
+REDIS_PORT = env("REDIS_PORT")
+REDIS_PASSWORD = env("REDIS_PASSWORD", default="")
+
+CLICKHOUSE_HOST = env("CLICKHOUSE_HOST", default="")
+CLICKHOUSE_HTTP_PORT = env("CLICKHOUSE_HTTP_PORT")
+CLICKHOUSE_DB = env("CLICKHOUSE_DB", default="zarinpal")
+CLICKHOUSE_USER = env("CLICKHOUSE_USER", default="zarinpal")
+CLICKHOUSE_PASSWORD = env("CLICKHOUSE_PASSWORD", default="")
+
 REST_FRAMEWORK = {
-    # JWT auth lands in a later sprint (§13); endpoints are anonymous until then.
+    # Protected merchant endpoints gain JWT authentication in Task 2.4.
 }
 
 LANGUAGE_CODE = "en-us"

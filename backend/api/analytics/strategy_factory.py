@@ -11,6 +11,7 @@ from typing import ClassVar
 from shared.dtos import ANALYSIS_KINDS
 from shared.protocols import AnalysisStrategy
 
+from analytics.strategies.peer_comparison import PeerComparisonAnalysisStrategy
 from analytics.strategies.time_range import TimeRangeAnalysisStrategy
 
 
@@ -24,6 +25,7 @@ class AnalysisStrategyFactory:
 
     _registry: ClassVar[dict[str, type[AnalysisStrategy]]] = {
         "time_range": TimeRangeAnalysisStrategy,
+        "peer_comparison": PeerComparisonAnalysisStrategy,
     }
 
     def create(self, kind: str) -> AnalysisStrategy:

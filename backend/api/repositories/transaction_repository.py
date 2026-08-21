@@ -1,4 +1,7 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 79b91213ad630e6d03bb7df1c9c316e3b7aa83bb
 """Transaction data-access gateway — the only layer that talks to ClickHouse (§7.3)."""
 
 from __future__ import annotations
@@ -285,7 +288,10 @@ class TransactionRepository:
             end_date=period_end.strftime("%Y-%m-%d"),
         )
         return self._query_clickhouse(sql)
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> 79b91213ad630e6d03bb7df1c9c316e3b7aa83bb
 """Django API wrapper / re-export for TransactionRepository."""
 
 import sys
@@ -299,4 +305,7 @@ if backend_dir not in sys.path:
 from repositories.transaction_repository import TransactionRepository  # noqa: E402
 
 __all__ = ["TransactionRepository"]
+<<<<<<< HEAD
 >>>>>>> 86635b79c8c983a290032777ef72e2b63964c97b
+=======
+>>>>>>> 79b91213ad630e6d03bb7df1c9c316e3b7aa83bb

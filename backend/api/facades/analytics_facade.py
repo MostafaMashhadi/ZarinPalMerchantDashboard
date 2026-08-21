@@ -9,6 +9,9 @@ Provides:
 Spec §19.4 references dashboard summary with cache-aside Redis. The
 full circuit-breaker is Task 2.5, but this facade implements the
 basic cache-aside pattern.
+
+All methods enforce object-level AuthZ (§13, §19.23) before doing
+any data access. Controllers pass the authenticated principal.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from django.utils import timezone
 from shared.dtos import AnalysisParams, AnalysisResult
 
 from analytics.strategy_factory import AnalysisStrategyFactory
+from facades.authz import AuthPrincipal, AuthzEnforcer
 from repositories.transaction_repository import TransactionRepository
 
 
@@ -43,9 +47,11 @@ class AnalyticsFacade:
         *,
         repo: TransactionRepository | None = None,
         strategy_factory: AnalysisStrategyFactory | None = None,
+        authz: AuthzEnforcer | None = None,
     ) -> None:
         self._repo = repo or TransactionRepository()
         self._factory = strategy_factory or AnalysisStrategyFactory()
+        self._authz = authz or AuthzEnforcer()
         self._redis: redis.Redis | None = None
         self._redis_lock = threading.Lock()
 
@@ -54,12 +60,18 @@ class AnalyticsFacade:
         merchant_id: UUID,
         period_start: datetime | None = None,
         period_end: datetime | None = None,
+        *,
+        principal: AuthPrincipal | None = None,
     ) -> dict[str, Any]:
         """Return cached dashboard summary or compute from ClickHouse.
 
         Cache-aside pattern (§19.4): try Redis first, on miss query
         ClickHouse rollups and populate cache.
+
+        AuthZ (§13): principal must be entitled to merchant_id before
+        any data access.
         """
+        self._authz.check_object_permission(principal, merchant_id)
         now = timezone.now()
         if period_start is None:
             from datetime import timedelta
@@ -101,8 +113,14 @@ class AnalyticsFacade:
         merchant_id: UUID,
         kind: str,
         params: AnalysisParams,
+        *,
+        principal: AuthPrincipal | None = None,
     ) -> AnalysisResult:
-        """Dispatch to the correct AnalysisStrategy via the factory (§6.2)."""
+        """Dispatch to the correct AnalysisStrategy via the factory (§6.2).
+
+        AuthZ (§13): principal must be entitled to merchant_id.
+        """
+        self._authz.check_object_permission(principal, merchant_id)
         strategy = self._factory.create(kind)
         result = strategy.compute(merchant_id, params)
 

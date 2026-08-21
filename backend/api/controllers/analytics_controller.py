@@ -3,18 +3,23 @@
 GET  /api/v1/merchants/{merchant_ref}/dashboard/summary
 POST /api/v1/merchants/{merchant_ref}/analysis/time-range
 POST /api/v1/merchants/{merchant_ref}/analysis/peer-comparison
+POST /api/v1/merchants/{merchant_ref}/analysis/event-impact
+POST /api/v1/merchants/{merchant_ref}/analysis/cohort-retention
+POST /api/v1/merchants/{merchant_ref}/analysis/anomaly-detection
 """
 
 from datetime import datetime
 from uuid import UUID
 
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from shared.dtos import AnalysisParams
 
 from facades.analytics_facade import AnalyticsFacade
+from facades.authz import AuthPrincipal
 from merchants.models import Merchant
 
 
@@ -60,7 +65,81 @@ def _serialize_result(result) -> dict:
     }
 
 
-class DashboardSummaryController(APIView):
+def _get_principal(request: Request) -> AuthPrincipal | None:
+    return getattr(request, "_auth_principal", None)
+
+
+def _handle_period_params(request: Request) -> tuple[dict, datetime, datetime, str | None]:
+    """Extract and validate period parameters.
+
+    Returns (error_response, period_start, period_end, extra) tuple.
+    If error_response is not None, the caller should return it immediately.
+    """
+    period_start_str = request.data.get("period_start") or request.query_params.get("period_start")
+    period_end_str = request.data.get("period_end") or request.query_params.get("period_end")
+    extra = request.data.get("extra", {}) or request.query_params.get("extra", {})
+
+    if not period_start_str or not period_end_str:
+        return (
+            Response(
+                {"error": "MISSING_PARAMETERS"},
+                status=status.HTTP_400_BAD_REQUEST,
+            ),
+            None,
+            None,
+            extra,
+        )
+
+    period_start = parse_datetime(period_start_str)
+    period_end = parse_datetime(period_end_str)
+    if period_start is None or period_end is None:
+        return (
+            Response(
+                {"error": "INVALID_PERIOD_FORMAT"},
+                status=status.HTTP_400_BAD_REQUEST,
+            ),
+            None,
+            None,
+            extra,
+        )
+
+    if period_start >= period_end:
+        return (
+            Response(
+                {"error": "PERIOD_START_MUST_PRECEDE_PERIOD_END"},
+                status=status.HTTP_400_BAD_REQUEST,
+            ),
+            None,
+            None,
+            extra,
+        )
+
+    return None, period_start, period_end, extra
+
+
+class _MerchantScopedController(APIView):
+    """Base controller that handles 404/403 distinction per §19.23.
+
+    - Unresolvable merchant_ref → 404
+    - Resolvable but AuthZ fails → 403 (PermissionDenied from Facade)
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except PermissionDenied as exc:
+            detail = exc.detail if hasattr(exc, "detail") else {}
+            if isinstance(detail, dict):
+                error_body = detail.get("error", "NOT_ENTITLED")
+            else:
+                error_body = "NOT_ENTITLED"
+            return Response(
+                {"error": error_body},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+
+class DashboardSummaryController(_MerchantScopedController):
     """GET /api/v1/merchants/{merchant_ref}/dashboard/summary"""
 
     def get(self, request: Request, merchant_ref: str) -> Response:
@@ -73,20 +152,24 @@ class DashboardSummaryController(APIView):
 
         period_start = parse_datetime(request.query_params.get("period_start"))
         period_end = parse_datetime(request.query_params.get("period_end"))
+        principal = _get_principal(request)
 
         facade = AnalyticsFacade()
         result = facade.get_dashboard_summary(
             merchant_id=merchant_id,
             period_start=period_start,
             period_end=period_end,
+            principal=principal,
         )
         return Response(result, status=status.HTTP_200_OK)
 
 
-class AnalysisTimeRangeController(APIView):
-    """POST /api/v1/merchants/{merchant_ref}/analysis/time-range"""
+class _AnalysisController(_MerchantScopedController):
+    """Base for POST analysis controllers — shared period param handling."""
 
-    def post(self, request: Request, merchant_ref: str) -> Response:
+    analysis_kind: str = ""
+
+    def _run_analysis(self, request: Request, merchant_ref: str) -> Response:
         merchant_id = resolve_merchant_ref(merchant_ref)
         if merchant_id is None:
             return Response(
@@ -94,29 +177,9 @@ class AnalysisTimeRangeController(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        period_start_str = request.data.get("period_start")
-        period_end_str = request.data.get("period_end")
-        extra = request.data.get("extra", {})
-
-        if not period_start_str or not period_end_str:
-            return Response(
-                {"error": "MISSING_PARAMETERS"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        period_start = parse_datetime(period_start_str)
-        period_end = parse_datetime(period_end_str)
-        if period_start is None or period_end is None:
-            return Response(
-                {"error": "INVALID_PERIOD_FORMAT"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if period_start >= period_end:
-            return Response(
-                {"error": "PERIOD_START_MUST_PRECEDE_PERIOD_END"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        error, period_start, period_end, extra = _handle_period_params(request)
+        if error is not None:
+            return error
 
         params = AnalysisParams(
             period_start=period_start,
@@ -127,210 +190,46 @@ class AnalysisTimeRangeController(APIView):
         facade = AnalyticsFacade()
         result = facade.run_analysis(
             merchant_id=merchant_id,
-            kind="time_range",
+            kind=self.analysis_kind,
             params=params,
+            principal=_get_principal(request),
         )
         return Response(_serialize_result(result), status=status.HTTP_200_OK)
 
 
-class AnalysisPeerComparisonController(APIView):
-    """POST /api/v1/merchants/{merchant_ref}/analysis/peer-comparison (§19.9)."""
+class AnalysisTimeRangeController(_AnalysisController):
+    analysis_kind = "time_range"
 
     def post(self, request: Request, merchant_ref: str) -> Response:
-        merchant_id = resolve_merchant_ref(merchant_ref)
-        if merchant_id is None:
-            return Response(
-                {"error": "MERCHANT_NOT_FOUND"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        period_start_str = request.data.get("period_start")
-        period_end_str = request.data.get("period_end")
-        extra = request.data.get("extra", {})
-
-        if not period_start_str or not period_end_str:
-            return Response(
-                {"error": "MISSING_PARAMETERS"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        period_start = parse_datetime(period_start_str)
-        period_end = parse_datetime(period_end_str)
-        if period_start is None or period_end is None:
-            return Response(
-                {"error": "INVALID_PERIOD_FORMAT"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if period_start >= period_end:
-            return Response(
-                {"error": "PERIOD_START_MUST_PRECEDE_PERIOD_END"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        params = AnalysisParams(
-            period_start=period_start,
-            period_end=period_end,
-            extra=extra,
-        )
-
-        facade = AnalyticsFacade()
-        result = facade.run_analysis(
-            merchant_id=merchant_id,
-            kind="peer_comparison",
-            params=params,
-        )
-        return Response(_serialize_result(result), status=status.HTTP_200_OK)
+        return self._run_analysis(request, merchant_ref)
 
 
-class AnalysisEventImpactController(APIView):
-    """POST /api/v1/merchants/{merchant_ref}/analysis/event-impact (§19.8)."""
+class AnalysisPeerComparisonController(_AnalysisController):
+    analysis_kind = "peer_comparison"
 
     def post(self, request: Request, merchant_ref: str) -> Response:
-        merchant_id = resolve_merchant_ref(merchant_ref)
-        if merchant_id is None:
-            return Response(
-                {"error": "MERCHANT_NOT_FOUND"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        period_start_str = request.data.get("period_start")
-        period_end_str = request.data.get("period_end")
-        extra = request.data.get("extra", {})
-
-        if not period_start_str or not period_end_str:
-            return Response(
-                {"error": "MISSING_PARAMETERS"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        period_start = parse_datetime(period_start_str)
-        period_end = parse_datetime(period_end_str)
-        if period_start is None or period_end is None:
-            return Response(
-                {"error": "INVALID_PERIOD_FORMAT"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if period_start >= period_end:
-            return Response(
-                {"error": "PERIOD_START_MUST_PRECEDE_PERIOD_END"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        params = AnalysisParams(
-            period_start=period_start,
-            period_end=period_end,
-            extra=extra,
-        )
-
-        facade = AnalyticsFacade()
-        result = facade.run_analysis(
-            merchant_id=merchant_id,
-            kind="event_impact",
-            params=params,
-        )
-        return Response(_serialize_result(result), status=status.HTTP_200_OK)
+        return self._run_analysis(request, merchant_ref)
 
 
-class AnalysisCohortRetentionController(APIView):
-    """POST /api/v1/merchants/{merchant_ref}/analysis/cohort-retention (§19.10)."""
+class AnalysisEventImpactController(_AnalysisController):
+    analysis_kind = "event_impact"
 
     def post(self, request: Request, merchant_ref: str) -> Response:
-        merchant_id = resolve_merchant_ref(merchant_ref)
-        if merchant_id is None:
-            return Response(
-                {"error": "MERCHANT_NOT_FOUND"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        period_start_str = request.data.get("period_start")
-        period_end_str = request.data.get("period_end")
-        extra = request.data.get("extra", {})
-
-        if not period_start_str or not period_end_str:
-            return Response(
-                {"error": "MISSING_PARAMETERS"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        period_start = parse_datetime(period_start_str)
-        period_end = parse_datetime(period_end_str)
-        if period_start is None or period_end is None:
-            return Response(
-                {"error": "INVALID_PERIOD_FORMAT"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if period_start >= period_end:
-            return Response(
-                {"error": "PERIOD_START_MUST_PRECEDE_PERIOD_END"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        params = AnalysisParams(
-            period_start=period_start,
-            period_end=period_end,
-            extra=extra,
-        )
-
-        facade = AnalyticsFacade()
-        result = facade.run_analysis(
-            merchant_id=merchant_id,
-            kind="cohort_retention",
-            params=params,
-        )
-        return Response(_serialize_result(result), status=status.HTTP_200_OK)
+        return self._run_analysis(request, merchant_ref)
 
 
-class AnalysisAnomalyDetectionController(APIView):
-    """POST /api/v1/merchants/{merchant_ref}/analysis/anomaly-detection (§19.11)."""
+class AnalysisCohortRetentionController(_AnalysisController):
+    analysis_kind = "cohort_retention"
 
     def post(self, request: Request, merchant_ref: str) -> Response:
-        merchant_id = resolve_merchant_ref(merchant_ref)
-        if merchant_id is None:
-            return Response(
-                {"error": "MERCHANT_NOT_FOUND"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        return self._run_analysis(request, merchant_ref)
 
-        period_start_str = request.data.get("period_start")
-        period_end_str = request.data.get("period_end")
-        extra = request.data.get("extra", {})
 
-        if not period_start_str or not period_end_str:
-            return Response(
-                {"error": "MISSING_PARAMETERS"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+class AnalysisAnomalyDetectionController(_AnalysisController):
+    analysis_kind = "anomaly_detection"
 
-        period_start = parse_datetime(period_start_str)
-        period_end = parse_datetime(period_end_str)
-        if period_start is None or period_end is None:
-            return Response(
-                {"error": "INVALID_PERIOD_FORMAT"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if period_start >= period_end:
-            return Response(
-                {"error": "PERIOD_START_MUST_PRECEDE_PERIOD_END"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        params = AnalysisParams(
-            period_start=period_start,
-            period_end=period_end,
-            extra=extra,
-        )
-
-        facade = AnalyticsFacade()
-        result = facade.run_analysis(
-            merchant_id=merchant_id,
-            kind="anomaly_detection",
-            params=params,
-        )
-        return Response(_serialize_result(result), status=status.HTTP_200_OK)
+    def post(self, request: Request, merchant_ref: str) -> Response:
+        return self._run_analysis(request, merchant_ref)
 
 
 __all__ = [

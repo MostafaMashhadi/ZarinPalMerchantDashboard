@@ -500,3 +500,142 @@ class TransactionRepository:
             end_date=period_end.strftime("%Y-%m-%d"),
         )
         return self._query_clickhouse(sql)
+
+    def get_events_in_range(
+        self,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> list[dict[str, Any]]:
+        """Query EVENT_CALENDAR for events overlapping the given period (§7.4)."""
+        sql = """
+            SELECT
+                event_key,
+                title,
+                start_date,
+                end_date,
+                event_type
+            FROM event_calendar
+            WHERE start_date <= '{end_date}'
+              AND end_date >= '{start_date}'
+            ORDER BY start_date
+        """
+
+        sql = sql.format(
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+        )
+        return self._query_clickhouse(sql)
+
+    def get_merchant_gross_volume(
+        self,
+        merchant_id: UUID,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> int:
+        """Get a single merchant's gross volume for a period using -Merge pattern.
+
+        Excludes Reversed sessions (only Verified/Paid count).
+        """
+        merchant_key = self._resolve_merchant_key(merchant_id)
+
+        sql = """
+            SELECT
+                sumMerge(gross_volume_state) AS gross_volume
+            FROM tx_daily_rollup
+            WHERE merchant_key = '{merchant_key}'
+              AND day BETWEEN '{start_date}' AND '{end_date}'
+        """
+
+        sql = sql.format(
+            merchant_key=merchant_key,
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+        )
+        rows = self._query_clickhouse(sql)
+        if not rows:
+            return 0
+        return int(rows[0].get("gross_volume", 0))
+
+    def get_category_gross_volume(
+        self,
+        category_id: str,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> int:
+        """Get a category's total gross volume for a period using -Merge pattern."""
+        sql = """
+            SELECT
+                sumMerge(category_gross_volume_state) AS category_gross_volume
+            FROM category_daily_rollup
+            WHERE category_id = '{category_id}'
+              AND day BETWEEN '{start_date}' AND '{end_date}'
+        """
+
+        sql = sql.format(
+            category_id=category_id,
+            start_date=period_start.strftime("%Y-%m-%d"),
+            end_date=period_end.strftime("%Y-%m-%d"),
+        )
+        rows = self._query_clickhouse(sql)
+        if not rows:
+            return 0
+        return int(rows[0].get("category_gross_volume", 0))
+
+    def get_cohort_retention(
+        self,
+        merchant_id: UUID,
+        cohort_start: datetime,
+        cohort_end: datetime,
+        retention_end: datetime,
+        granularity: str = "week",
+    ) -> list[dict[str, Any]]:
+        """Get cohort retention data segmented by verify_type (§7.5).
+
+        Cohort = distinct payer_card_key values with a successful
+        (Verified/Paid) session in the cohort period, scoped to this
+        merchant only (payer_card_key is not comparable across merchants).
+
+        For each subsequent period bucket, returns the fraction of the
+        original cohort with at least one more successful session.
+        """
+        merchant_key = self._resolve_merchant_key(merchant_id)
+
+        bucket_expr = (
+            "toStartOfWeek(created_at)"
+            if granularity == "week"
+            else "toStartOfMonth(created_at)"
+        )
+
+        sql = """
+            WITH cohort AS (
+                SELECT DISTINCT payer_card_key
+                FROM tx_raw
+                WHERE merchant_key = '{merchant_key}'
+                  AND created_at >= '{cohort_start}'
+                  AND created_at < '{cohort_end}'
+                  AND session_status IN ('Verified', 'Paid')
+            )
+            SELECT
+                {bucket_expr} AS bucket,
+                verify_type,
+                count(DISTINCT payer_card_key) AS retained_users,
+                (SELECT count() FROM cohort) AS cohort_size
+            FROM tx_raw
+            WHERE merchant_key = '{merchant_key}'
+              AND created_at >= '{cohort_start}'
+              AND created_at < '{retention_end}'
+              AND session_status IN ('Verified', 'Paid')
+              AND payer_card_key IN (SELECT payer_card_key FROM cohort)
+            GROUP BY bucket, verify_type
+            ORDER BY bucket, verify_type
+        """
+
+        sql = sql.format(
+            merchant_key=merchant_key,
+            cohort_start=cohort_start.strftime("%Y-%m-%d"),
+            cohort_end=cohort_end.strftime("%Y-%m-%d"),
+            retention_end=retention_end.strftime("%Y-%m-%d"),
+            bucket_expr=bucket_expr,
+        )
+        return self._query_clickhouse(sql)
+

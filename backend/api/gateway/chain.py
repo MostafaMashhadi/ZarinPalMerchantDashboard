@@ -11,14 +11,11 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from shared.dtos import DraftRequest, DraftResponse
-from shared.exceptions import AllProvidersExhausted
-
 from gateway.adapters.avalai_adapter import AvalAIAdapter
 from gateway.circuit_breaker import LLMCircuitBreaker
 from gateway.cost_ledger import CostLedger
-from gateway.adapters.avalai_adapter import AvalAIAdapter, TOKENS_PER_USD
-from gateway.circuit_breaker import LLMCircuitBreaker
+from shared.dtos import DraftRequest, DraftResponse
+from shared.exceptions import AllProvidersExhausted
 
 
 class TierHandlerProtocol(Protocol):
@@ -87,7 +84,7 @@ class ModelTierHandler:
 
         if self.next_ is None:
             raise AllProvidersExhausted(
-                f"Circuit open or cost ceiling exceeded at all tiers"
+                "Circuit open or cost ceiling exceeded at all tiers"
             )
         return self.next_.handle(request, ledger, scope)
 
@@ -96,7 +93,12 @@ class ModelTierHandler:
     ) -> bool:
         """Check cost budget for this tier and scope (§9.3)."""
         estimated_tokens = request.estimated_tokens or self._estimate_tokens(request)
-        return ledger.can_afford(scope, self.tier, estimated_tokens)
+        return ledger.can_afford(
+            scope=scope,
+            tier=self.tier,
+            estimated_tokens=estimated_tokens,
+            merchant_id=request.context.get("merchant_id", ""),
+        )
 
     @staticmethod
     def _estimate_tokens(request: DraftRequest) -> int:
@@ -118,7 +120,7 @@ class ModelTierHandler:
 
 
 class ModelRouterChain:
-    """Chain of Responsibility: cheap → mid → premium (§6.3, §9.3).
+    """Chain of Responsibility: cheap -> mid -> premium (§6.3, §9.3).
 
     Wiring order = cost-ascending: cheap -> mid -> premium.
     The SAME chain instance is reused by both the agentic Orchestrator

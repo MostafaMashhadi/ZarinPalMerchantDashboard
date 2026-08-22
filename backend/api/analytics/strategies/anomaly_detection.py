@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from repositories.transaction_repository import TransactionRepository
 from shared.dtos import AnalysisParams, AnalysisResult, ProvenanceSpec
@@ -165,7 +165,7 @@ class AnomalyDetectionAnalysisStrategy:
         return scored
 
     def _publish_insight(self, result: AnalysisResult) -> None:
-        """Clean seam for Sprint 3's InsightEventBus (§9.5, §19.11).
+        """Publish InsightPublishedEvent to InsightEventBus (§9.5, §19.18).
 
         The Strategy does NOT decide whether to notify (§7.6 step 3).
         It simply publishes an InsightPublishedEvent for any flagged
@@ -175,13 +175,25 @@ class AnomalyDetectionAnalysisStrategy:
         This call site is identical whether invoked from REST or chat;
         the Strategy has no notion of its caller.
         """
-        if self._notify is not None and result.body.get("flagged_count", 0) > 0:
-            self._notify(result)
+        if result.body.get("flagged_count", 0) > 0:
+            from gateway.event_bus import InsightEventBus, InsightPublishedEvent
+
+            event = InsightPublishedEvent(
+                insight_id=uuid4(),
+                merchant_id=result.merchant_id,
+                kind=result.kind,
+                period_start=result.period_start,
+                period_end=result.period_end,
+                headline=result.headline,
+            )
+            InsightEventBus.instance().publish(event)
 
     def set_insight_publisher(self, publisher: Any) -> None:
-        """Inject the InsightEventBus publisher for Sprint 3 (§19.11).
+        """Inject the InsightEventBus publisher (§19.11).
 
-        Before Sprint 3, this is a no-op seam that does nothing.
+        Kept for backward compatibility — the Strategy now publishes
+        directly to the InsightEventBus singleton. This no-op seam
+        preserves the existing API.
         """
         self._notify = publisher
 

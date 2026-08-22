@@ -8,47 +8,61 @@ Four cooperating patterns:
 """
 
 from gateway.adapters.avalai_adapter import (
+    TOKENS_PER_USD,
     AvalAIAdapter,
     AvalAITierConfig,
-    TOKENS_PER_USD,
     estimate_cost_usd,
     get_tier_config,
 )
 from gateway.cache import LLMResponseCache
+from gateway.chain import ModelRouterChain, ModelTierHandler, build_default_chain
 from gateway.circuit_breaker import (
-    LLMCircuitBreaker,
     CircuitBreakerConfig,
     CircuitState,
+    LLMCircuitBreaker,
 )
-from gateway.chain import ModelRouterChain, ModelTierHandler, build_default_chain
 from gateway.cost_ledger import (
     AGENT_CEILINGS,
     CHAT_CEILINGS,
     SCOPE_AGENT,
     SCOPE_CHAT,
     SCOPE_CONFIGS,
-    ScopeCeilingConfig,
     CostLedger,
+    ScopeCeilingConfig,
+)
+from gateway.event_bus import (
+    InsightEventBus,
+    InsightPublishedEvent,
+    Subscriber,
+)
+from gateway.notification_service import (
+    MerchantNotificationPrefs,
+    NotificationService,
 )
 
 __all__ = [
     "AGENT_CEILINGS",
-    "AvalAIAdapter",
-    "AvalAITierConfig",
     "CHAT_CEILINGS",
-    "CircuitBreakerConfig",
-    "CircuitState",
-    "CostLedger",
-    "LLMResponseCache",
-    "LLMCircuitBreaker",
     "SCOPE_AGENT",
     "SCOPE_CHAT",
     "SCOPE_CONFIGS",
-    "ScopeCeilingConfig",
     "TOKENS_PER_USD",
-    "estimate_cost_usd",
-    "get_tier_config",
+    "AvalAIAdapter",
+    "AvalAITierConfig",
+    "CircuitBreakerConfig",
+    "CircuitState",
+    "CostLedger",
+    "InsightEventBus",
+    "InsightPublishedEvent",
+    "LLMCircuitBreaker",
+    "LLMResponseCache",
+    "MerchantNotificationPrefs",
     "ModelRouterChain",
     "ModelTierHandler",
+    "NotificationService",
+    "ScopeCeilingConfig",
+    "Subscriber",
     "build_default_chain",
+    "estimate_cost_usd",
+    "get_tier_config",
 ]

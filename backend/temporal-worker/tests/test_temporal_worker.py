@@ -379,6 +379,149 @@ class TestActivityLogic:
 
         assert result is True
 
+    def test_validate_rejects_ungrounded_number(self):
+        """ValidateAgainstData rejects narratives with numbers not traceable
+        to source data or claims (§9.2, golden-file test category, §16)."""
+        from activities.insight_activities import (
+            SourcedClaim,
+            ValidationInput,
+            validate_against_data,
+        )
+
+        input_data = ValidationInput(
+            merchant_id=uuid.uuid4(),
+            narrative="Volume was 999999999 Toman",  # invented number
+            claims=[
+                SourcedClaim(
+                    claim="volume",
+                    value=12500000,
+                    source_insight_id=uuid.uuid4(),
+                ),
+            ],
+            source_data={},
+        )
+
+        with pytest.raises(ValueError, match="Ungrounded"):
+            _run(validate_against_data(input_data))
+
+    def test_validate_accepts_grounded_numbers(self):
+        """ValidateAgainstData accepts narratives where all numbers
+        are traceable to source data or claims."""
+        from activities.insight_activities import (
+            SourcedClaim,
+            ValidationInput,
+            validate_against_data,
+        )
+
+        input_data = ValidationInput(
+            merchant_id=uuid.uuid4(),
+            narrative="Your volume was 12500000 with 42 successful sessions.",
+            claims=[
+                SourcedClaim(
+                    claim="volume",
+                    value=12500000,
+                    source_insight_id=uuid.uuid4(),
+                ),
+                SourcedClaim(
+                    claim="success_count",
+                    value=42,
+                    source_insight_id=uuid.uuid4(),
+                ),
+            ],
+            source_data={"category_avg": 78.2},
+        )
+
+        result = _run(validate_against_data(input_data))
+        assert result is True
+
+
+class TestValidateAgainstDataGoldenFile:
+    """Golden-file tests for ValidateAgainstData (§16).
+
+    Loads expected input/output pairs from JSON files and verifies
+    the grounding validator produces the expected result.
+    """
+
+    def test_grounded_draft_passes(self):
+        """Golden file: grounded_draft.json — all numbers traceable."""
+        import json
+        import os
+
+        from activities.insight_activities import (
+            SourcedClaim,
+            ValidationInput,
+            validate_against_data,
+        )
+
+        golden_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "tests",
+            "golden",
+            "grounded_draft.json",
+        )
+        with open(golden_path, encoding="utf-8") as f:
+            golden = json.load(f)
+
+        claims = [
+            SourcedClaim(
+                claim=c["claim"],
+                value=c["value"],
+                source_insight_id=uuid.UUID(c["source_insight_id"]),
+            )
+            for c in golden["claims"]
+        ]
+
+        input_data = ValidationInput(
+            merchant_id=uuid.uuid4(),
+            narrative=golden["narrative"],
+            claims=claims,
+            source_data={},
+        )
+
+        result = _run(validate_against_data(input_data))
+        assert result is True
+
+    def test_ungrounded_draft_rejected(self):
+        """Golden file: ungrounded_draft.json — contains invented number."""
+        import json
+        import os
+
+        from activities.insight_activities import (
+            SourcedClaim,
+            ValidationInput,
+            validate_against_data,
+        )
+
+        golden_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "tests",
+            "golden",
+            "ungrounded_draft.json",
+        )
+        with open(golden_path, encoding="utf-8") as f:
+            golden = json.load(f)
+
+        claims = [
+            SourcedClaim(
+                claim=c["claim"],
+                value=c["value"],
+                source_insight_id=uuid.UUID(c["source_insight_id"]),
+            )
+            for c in golden["claims"]
+        ]
+
+        input_data = ValidationInput(
+            merchant_id=uuid.uuid4(),
+            narrative=golden["narrative"],
+            claims=claims,
+            source_data={},
+        )
+
+        with pytest.raises(ValueError, match="Ungrounded"):
+            _run(validate_against_data(input_data))
+
 
 class TestBulkheadIsolation:
     """Verify task queues are isolated (§6, §9.2).

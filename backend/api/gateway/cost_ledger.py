@@ -1,12 +1,11 @@
-"""CostLedger Singleton — single authoritative in-process view of spend per scope (§6.5, §9.3, §19.24).
+"""CostLedger Singleton — spend tracking per scope (§6.5, §9.3, §19.24).
 
 Backed by Redis INCRBYFLOAT counters keyed by (scope, merchant_id|GLOBAL, date)
-so multiple worker processes share one authoritative view without a distributed lock.
+so multiple worker processes share one authoritative view without a lock.
 
 'scope' is either "agent" (infrequent, higher per-run ceiling) or "chat"
 (frequent, lower per-turn ceiling, tighter global daily cap). Every debit is
-also durably logged to COST_LEDGER_ENTRY asynchronously, so the hot path
-never blocks on Postgres.
+also durably logged to COST_LEDGER_ENTRY asynchronously.
 
 Ceiling configuration:
   - agent: per-interaction $0.50, merchant daily $5.00, global daily $50.00
@@ -19,7 +18,6 @@ import os
 import threading
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
 
 import redis
 
@@ -162,29 +160,19 @@ class CostLedger:
         if not self._redis:
             return True
 
-        today = self._today()
         merchant_key = self._merchant_key(scope, str(merchant_id))
         global_key = self._global_key(scope)
 
-        try:
-            pipe = self._redis.pipeline()
-            pipe.get(merchant_key)
-            pipe.get(global_key)
-            result = pipe.execute()
+        merchant_spent_raw = self._redis.get(merchant_key)
+        global_spent_raw = self._redis.get(global_key)
 
-            if len(result) >= 2:
-                merchant_spent = Decimal(result[0] or 0)
-                global_spent = Decimal(result[1] or 0)
-            else:
-                merchant_spent = Decimal(0)
-                global_spent = Decimal(0)
+        merchant_spent = Decimal(merchant_spent_raw or 0)
+        global_spent = Decimal(global_spent_raw or 0)
 
-            if merchant_spent + estimated_cost > config.merchant_daily:
-                return False
-            if global_spent + estimated_cost > config.global_daily:
-                return False
-        except redis.RedisError:
-            return True
+        if merchant_spent + estimated_cost > config.merchant_daily:
+            return False
+        if global_spent + estimated_cost > config.global_daily:
+            return False
 
         return True
 
@@ -321,6 +309,6 @@ __all__ = [
     "SCOPE_AGENT",
     "SCOPE_CHAT",
     "SCOPE_CONFIGS",
-    "ScopeCeilingConfig",
     "CostLedger",
+    "ScopeCeilingConfig",
 ]

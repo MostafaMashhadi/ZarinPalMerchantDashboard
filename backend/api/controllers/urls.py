@@ -1,5 +1,10 @@
 from django.urls import path
 
+from controllers.agent_controller import (
+    AgentRunCostController,
+    AgentRunPollController,
+    AgentTriggerSummaryController,
+)
 from controllers.analytics_controller import (
     AnalysisAnomalyDetectionController,
     AnalysisCohortRetentionController,
@@ -10,6 +15,10 @@ from controllers.analytics_controller import (
 )
 from controllers.auth_controller import LoginController, LogoutController, RefreshController
 from controllers.health import HealthController
+from controllers.notification_controller import (
+    NotificationListController,
+    NotificationMarkReadController,
+)
 
 urlpatterns = [
     path("health", HealthController.as_view(), name="health"),
@@ -45,5 +54,30 @@ urlpatterns = [
         "merchants/<str:merchant_ref>/analysis/anomaly-detection",
         AnalysisAnomalyDetectionController.as_view(),
         name="analysis-anomaly-detection",
+    ),
+    path(
+        "merchants/<str:merchant_ref>/agent/trigger-summary",
+        AgentTriggerSummaryController.as_view(),
+        name="agent-trigger-summary",
+    ),
+    path(
+        "merchants/<str:merchant_ref>/agent/runs/<str:run_id>",
+        AgentRunPollController.as_view(),
+        name="agent-run-poll",
+    ),
+    path(
+        "merchants/<str:merchant_ref>/agent/runs/<str:run_id>/cost",
+        AgentRunCostController.as_view(),
+        name="agent-run-cost",
+    ),
+    path(
+        "merchants/<str:merchant_ref>/notifications",
+        NotificationListController.as_view(),
+        name="notification-list",
+    ),
+    path(
+        "merchants/<str:merchant_ref>/notifications/<str:notification_id>/mark-read",
+        NotificationMarkReadController.as_view(),
+        name="notification-mark-read",
     ),
 ]

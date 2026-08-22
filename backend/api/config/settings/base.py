@@ -98,11 +98,22 @@ REDIS_HOST = env("REDIS_HOST", default="")
 REDIS_PORT = env("REDIS_PORT")
 REDIS_PASSWORD = env("REDIS_PASSWORD", default="")
 
+NOTIFICATION_DEFAULT_SEVERITY_THRESHOLD = env(
+    "NOTIFICATION_DEFAULT_SEVERITY_THRESHOLD", default="info"
+)
+NOTIFICATION_CHANNELS_DEFAULT = env(
+    "NOTIFICATION_CHANNELS_DEFAULT", default="in_app"
+)
+
 CLICKHOUSE_HOST = env("CLICKHOUSE_HOST", default="")
 CLICKHOUSE_HTTP_PORT = env("CLICKHOUSE_HTTP_PORT")
 CLICKHOUSE_DB = env("CLICKHOUSE_DB", default="zarinpal")
 CLICKHOUSE_USER = env("CLICKHOUSE_USER", default="zarinpal")
 CLICKHOUSE_PASSWORD = env("CLICKHOUSE_PASSWORD", default="")
+
+TEMPORAL_HOST = env("TEMPORAL_HOST", default="localhost")
+TEMPORAL_PORT = env("TEMPORAL_PORT", default="7233")
+TEMPORAL_NAMESPACE = env("TEMPORAL_NAMESPACE", default="default")
 
 REST_FRAMEWORK = {
     # Protected merchant endpoints gain JWT authentication in Task 2.4.

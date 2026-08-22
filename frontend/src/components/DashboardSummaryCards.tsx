@@ -8,6 +8,7 @@ import {
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import type { HeadlineCard } from '../services/types'
+import ZarinpalLogo from './ZarinpalLogo'
 import {
   ResponsiveContainer,
   RadialBarChart,
@@ -250,7 +251,7 @@ const DashboardSummaryCards: React.FC = () => {
           <div className="h-4 w-44 animate-pulse rounded-full bg-muted" />
           <div className="h-6 w-36 animate-pulse rounded-full bg-muted" />
         </div>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       </section>
@@ -261,7 +262,7 @@ const DashboardSummaryCards: React.FC = () => {
     <section className="space-y-5">
 
       {/* ── Gradient Hero Banner ──────────────────────────────── */}
-      <div className="overview-hero p-6 sm:p-8">
+      <div className="overview-hero p-4 sm:p-8">
         {/* Inner glass overlay for depth */}
         <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
           <div className="absolute inset-0 bg-gradient-to-br from-white/[0.06] via-transparent to-transparent" />
@@ -279,9 +280,7 @@ const DashboardSummaryCards: React.FC = () => {
           {/* Heading */}
           <div>
             <div className="flex items-center gap-2.5 mb-2">
-              <div className="size-8 rounded-xl logo-zarin flex items-center justify-center ring-1 ring-white/20">
-                <span className="text-sm font-black text-white">Z</span>
-              </div>
+              <ZarinpalLogo className="h-10 w-8 rounded-md bg-white p-1 ring-1 ring-white/20" />
               <h2 className="text-sm font-black text-white tracking-tight">نمای کلی عملکرد پذیرنده</h2>
             </div>
             {summary && (
@@ -292,7 +291,7 @@ const DashboardSummaryCards: React.FC = () => {
           </div>
 
           {/* Hero stats row */}
-          <div className="flex flex-wrap items-center gap-6 sm:gap-8">
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center sm:gap-8">
             {cards.slice(0, 3).map((c) => (
               <HeroStat
                 key={c.key}
@@ -316,7 +315,7 @@ const DashboardSummaryCards: React.FC = () => {
       </div>
 
       {/* ── Cards grid ────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
         {cards.map((card, index) => {
           const visual = VISUAL[card.key] ?? fallbackVisual
           const positive = card.delta >= 0
@@ -328,11 +327,11 @@ const DashboardSummaryCards: React.FC = () => {
             <div
               key={card.key}
               className={cn(
-                'card-zarin group relative flex flex-col overflow-hidden animate-fade-in',
+                'card-zarin group relative flex min-w-0 flex-col overflow-hidden p-4 sm:p-[18px] sm:pb-4 animate-fade-in',
                 visual.topBorderClass,
               )}
-              style={{ animationDelay: `${animDelay}ms`, padding: '18px 18px 16px' }}
-            >
+                style={{ animationDelay: `${animDelay}ms` }}
+              >
               {/* ── Header: icon + label + donut ── */}
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2">

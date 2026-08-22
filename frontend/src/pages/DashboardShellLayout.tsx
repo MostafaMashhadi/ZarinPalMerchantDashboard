@@ -13,9 +13,11 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
-import { MessageCircle, Sparkles } from 'lucide-react'
+import { LogOut, MessageCircle, Sparkles } from 'lucide-react'
 import ChatPanel from '../components/ChatPanel'
 import SidebarToggleIcon from '../components/SidebarToggleIcon'
+import ZarinpalLogo from '../components/ZarinpalLogo'
+import { logout } from '../store/authSlice'
 const DashboardShellLayout: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
@@ -80,6 +82,17 @@ const DashboardShellLayout: React.FC = () => {
             <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
               <span className="hidden rounded-full bg-primary/10 px-3 py-1.5 font-semibold text-primary sm:inline">حساب فعال</span>
               <span className="size-2 rounded-full bg-primary" aria-label="سرویس فعال" />
+              <Button
+                type="button"
+                variant="outline"
+                aria-label="خروج از حساب"
+                title="خروج از حساب"
+                onClick={() => void dispatch(logout())}
+                className="h-10 rounded-xl border-destructive/20 bg-white/70 px-2.5 text-destructive shadow-sm hover:bg-destructive/5 hover:text-destructive sm:gap-2 sm:px-3"
+              >
+                <LogOut className="size-4" aria-hidden="true" />
+                <span className="hidden font-bold sm:inline">خروج</span>
+              </Button>
             </div>
           </header>
           <main className="relative mx-auto flex w-full min-w-0 flex-1 flex-col gap-6 px-3 py-6 sm:px-4 sm:py-7 lg:gap-7 lg:px-8 lg:py-9">
@@ -95,9 +108,7 @@ const DashboardShellLayout: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
-                <div className="size-5 rounded-md logo-zarin flex items-center justify-center">
-                  <span className="text-[9px] font-black text-white">Z</span>
-                </div>
+                <ZarinpalLogo className="h-8 w-6 rounded-sm bg-white p-0.5" />
                 زرین‌پال · پلتفرم هوشمند تحلیل پرداخت
               </div>
             </div>

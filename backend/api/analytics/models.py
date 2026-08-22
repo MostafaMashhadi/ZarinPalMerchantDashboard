@@ -186,6 +186,9 @@ class CostLedgerEntry(models.Model):
         related_name="cost_ledger_entries",
         db_column="merchant_id",
     )
+    tier = models.CharField(max_length=32, default="cheap")
+    tokens_in = models.IntegerField(default=0)
+    tokens_out = models.IntegerField(default=0)
     amount_usd = models.DecimalField(max_digits=12, decimal_places=6)
     ledger_date = models.DateField()
     created_at = models.DateTimeField()

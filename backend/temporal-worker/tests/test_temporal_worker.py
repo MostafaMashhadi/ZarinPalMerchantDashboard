@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import datetime
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -54,92 +53,87 @@ class TestTaskQueues:
 
 class TestCostLedger:
     def setup_method(self):
-        from cost_ledger import CostLedger
+        from gateway.cost_ledger import CostLedger
 
         CostLedger.reset_for_testing()
 
     def teardown_method(self):
-        from cost_ledger import CostLedger
+        from gateway.cost_ledger import CostLedger
 
         CostLedger.reset_for_testing()
 
     def test_singleton_returns_same_instance(self):
-        from cost_ledger import CostLedger
+        from gateway.cost_ledger import CostLedger
 
         a = CostLedger.instance()
         b = CostLedger.instance()
         assert a is b
 
     def test_agent_scope_not_equal_to_chat_scope(self):
-        from cost_ledger import CostLedger
+        from gateway.cost_ledger import SCOPE_AGENT, SCOPE_CHAT
 
-        ledger = CostLedger.instance()
-        assert ledger.SCOPE_AGENT == "agent"
-        assert ledger.SCOPE_CHAT == "chat"
-        assert ledger.SCOPE_AGENT != ledger.SCOPE_CHAT
+        assert SCOPE_AGENT == "agent"
+        assert SCOPE_CHAT == "chat"
+        assert SCOPE_AGENT != SCOPE_CHAT
 
     def test_can_afford_per_interaction_ceiling(self):
-        from cost_ledger import CostLedger
+        from gateway.cost_ledger import CostLedger
 
         mock_redis = MagicMock()
         mock_redis.get.return_value = None
         ledger = CostLedger.instance(redis_client=mock_redis)
-        merchant_id = str(uuid.uuid4())
 
-        assert ledger.can_afford("agent", merchant_id, Decimal("0.50"))
-        assert not ledger.can_afford("agent", merchant_id, Decimal("0.51"))
+        assert ledger.can_afford("agent", "cheap", 9999)
+        assert not ledger.can_afford("agent", "cheap", 10001)
 
     def test_chat_ceiling_lower_than_agent(self):
-        from cost_ledger import CostLedger
+        from gateway.cost_ledger import CostLedger
 
         mock_redis = MagicMock()
         mock_redis.get.return_value = None
         ledger = CostLedger.instance(redis_client=mock_redis)
-        merchant_id = str(uuid.uuid4())
 
-        assert ledger.can_afford("chat", merchant_id, Decimal("0.05"))
-        assert not ledger.can_afford("chat", merchant_id, Decimal("0.06"))
+        assert ledger.can_afford("chat", "cheap", 999)
+        assert not ledger.can_afford("chat", "cheap", 1001)
 
     def test_agent_can_afford_more_than_chat(self):
-        from cost_ledger import CostLedger
+        from gateway.cost_ledger import CostLedger
 
         mock_redis = MagicMock()
         mock_redis.get.return_value = None
         ledger = CostLedger.instance(redis_client=mock_redis)
-        merchant_id = str(uuid.uuid4())
 
-        assert ledger.can_afford("agent", merchant_id, Decimal("0.30"))
-        assert not ledger.can_afford("chat", merchant_id, Decimal("0.30"))
+        assert ledger.can_afford("agent", "cheap", 9999)
+        assert not ledger.can_afford("chat", "cheap", 9999)
 
-    def test_fails_open_without_redis(self):
-        from cost_ledger import CostLedger
+    def test_can_afford_returns_true_without_redis(self):
+        from gateway.cost_ledger import CostLedger
 
         ledger = CostLedger.instance(redis_client=None)
-        merchant_id = str(uuid.uuid4())
 
-        assert ledger.can_afford("agent", merchant_id, Decimal("0.50"))
+        assert ledger.can_afford("agent", "cheap", 100)
 
 
 class TestInsightEventBus:
     def setup_method(self):
-        from event_bus import InsightEventBus
+        from gateway.event_bus import InsightEventBus
 
         InsightEventBus.reset_for_testing()
 
     def teardown_method(self):
-        from event_bus import InsightEventBus
+        from gateway.event_bus import InsightEventBus
 
         InsightEventBus.reset_for_testing()
 
     def test_singleton(self):
-        from event_bus import InsightEventBus
+        from gateway.event_bus import InsightEventBus
 
         a = InsightEventBus.instance()
         b = InsightEventBus.instance()
         assert a is b
 
     def test_publish_dispatches_to_subscribers(self):
-        from event_bus import InsightEventBus, InsightPublishedEvent
+        from gateway.event_bus import InsightEventBus, InsightPublishedEvent
 
         received: list[InsightPublishedEvent] = []
 
@@ -160,7 +154,7 @@ class TestInsightEventBus:
         assert received[0] is event
 
     def test_multiple_subscribers_all_called(self):
-        from event_bus import InsightEventBus, InsightPublishedEvent
+        from gateway.event_bus import InsightEventBus, InsightPublishedEvent
 
         received_1: list[InsightPublishedEvent] = []
         received_2: list[InsightPublishedEvent] = []
@@ -181,9 +175,6 @@ class TestInsightEventBus:
 
         assert len(received_1) == 1
         assert len(received_2) == 1
-
-
-class TestWorkflowId:
     def test_deterministic_workflow_id(self):
         from workflows.insight_generation import workflow_id
 
@@ -350,7 +341,7 @@ class TestActivityLogic:
         assert result.tier == "cheap"
 
     def test_draft_narrative_checks_cost_ledger(self):
-        from cost_ledger import CostLedger
+        from gateway.cost_ledger import CostLedger
 
         CostLedger.reset_for_testing()
         mock_redis = MagicMock()
@@ -503,8 +494,9 @@ class TestEventOrdering:
         """_publish_event is called only via transaction.on_commit,
         guaranteeing the event is dispatched AFTER the DB transaction commits.
         """
+        from gateway.event_bus import InsightEventBus, InsightPublishedEvent
+
         from activities.insight_activities import PublishInput, _publish_event
-        from event_bus import InsightEventBus, InsightPublishedEvent
 
         InsightEventBus.reset_for_testing()
         received: list[InsightPublishedEvent] = []
@@ -546,8 +538,9 @@ class TestEventOrdering:
         from unittest.mock import MagicMock
         from uuid import UUID
 
+        from gateway.event_bus import InsightEventBus
+
         from activities.insight_activities import PublishInput
-        from event_bus import InsightEventBus
 
         source = inspect.getsource(__import__(
             "activities.insight_activities", fromlist=["publish"]

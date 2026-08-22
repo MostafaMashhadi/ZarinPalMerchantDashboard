@@ -26,6 +26,7 @@ import redis
 from django.conf import settings
 from django.utils import timezone
 
+from analytics.models import Insight
 from analytics.strategy_factory import AnalysisStrategyFactory
 from facades.authz import AuthPrincipal, AuthzEnforcer
 from repositories.transaction_repository import TransactionRepository
@@ -127,6 +128,48 @@ class AnalyticsFacade:
         self._invalidate_dashboard_cache(merchant_id)
 
         return result
+
+    def list_insights(
+        self,
+        merchant_id: UUID,
+        *,
+        kind: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        principal: AuthPrincipal | None = None,
+    ) -> list[dict[str, Any]]:
+        """List insights for a merchant with pagination (§19.21).
+
+        Pagination defaults: limit=20, offset=0.
+        AuthZ: principal must be entitled to merchant_id.
+        Returns list of serialized insight dicts.
+        """
+        self._authz.check_object_permission(principal, merchant_id)
+
+        queryset = Insight.objects.filter(
+            merchant_id=merchant_id
+        ).order_by("-generated_at")
+
+        if kind:
+            queryset = queryset.filter(kind=kind)
+
+        insights = list(queryset[offset:offset + limit])
+
+        return [
+            {
+                "id": str(i.id),
+                "kind": i.kind,
+                "headline": i.headline,
+                "body": i.body,
+                "status": i.status,
+                "low_confidence_peer_set": i.low_confidence_peer_set,
+                "period_start": i.period_start.isoformat(),
+                "period_end": i.period_end.isoformat(),
+                "generated_at": i.generated_at.isoformat(),
+                "agent_run_id": str(i.agent_run_id) if i.agent_run_id else None,
+            }
+            for i in insights
+        ]
 
     def _get_redis(self) -> redis.Redis | None:
         if self._redis is not None:

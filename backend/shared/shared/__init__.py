@@ -9,6 +9,7 @@ from shared.dtos import (
     SourcedClaim,
 )
 from shared.exceptions import AllProvidersExhausted, ProviderError
+from shared.merchant_ref import resolve_merchant_ref
 from shared.protocols import (
     AnalysisStrategy,
     ChatResponseDeliveryStrategy,
@@ -32,4 +33,5 @@ __all__ = [
     "ProvenanceSpec",
     "ProviderError",
     "SourcedClaim",
+    "resolve_merchant_ref",
 ]

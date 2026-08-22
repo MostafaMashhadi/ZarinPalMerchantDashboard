@@ -47,8 +47,10 @@ from mcp.types import (
 from api.mcp_registry import API_KEY_SECRET
 from auth.mcp_auth import McpAuthService, McpPrincipal
 from tools.mcp_tools import (
+    ASK_AGENT,
     LIST_INSIGHTS,
     TRIGGER_AGENTIC_SUMMARY,
+    handle_ask_agent,
     handle_list_insights,
     handle_trigger_agentic_summary,
 )
@@ -92,6 +94,10 @@ _TOOLS: dict[str, tuple[Tool, object]] = {
     "list_insights": (
         LIST_INSIGHTS,
         handle_list_insights,
+    ),
+    "ask_agent": (
+        ASK_AGENT,
+        handle_ask_agent,
     ),
 }
 

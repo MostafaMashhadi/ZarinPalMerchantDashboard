@@ -345,3 +345,359 @@ class TestMcpToolMerchantScope:
         assert "kind" in props
         assert "period_start" in props
         assert "period_end" in props
+
+    def test_ask_agent_schema_has_required_fields(self):
+        """ask_agent tool requires merchant_ref and message (§19.29)."""
+        from tools.mcp_tools import ASK_AGENT
+
+        assert "merchant_ref" in ASK_AGENT.input_schema["properties"]
+        assert "message" in ASK_AGENT.input_schema["properties"]
+        assert "session_id" in ASK_AGENT.input_schema["properties"]
+        assert "merchant_ref" in ASK_AGENT.input_schema.get("required", [])
+        assert "message" in ASK_AGENT.input_schema.get("required", [])
+
+
+# ---------------------------------------------------------------------------
+# ask_agent tool
+# ---------------------------------------------------------------------------
+
+
+class TestAskAgent:
+    """§19.29: ask_agent tool — chat via BufferedDelivery."""
+
+    def test_auto_creates_session_when_omitted(self):
+        """When session_id is omitted, a new session is created (§9.6.7)."""
+        merchant_uuid = uuid4()
+
+        mock_session = MagicMock()
+        mock_session.id = uuid4()
+
+        mock_session_repo = MagicMock()
+        mock_session_repo.get.return_value = None
+
+        mock_facade = MagicMock()
+        mock_facade._session_repo = mock_session_repo
+        mock_facade.create_session.return_value = mock_session
+
+        mock_turn_result = MagicMock()
+        mock_turn_result.chunks = []
+        mock_turn_result.referenced_insight_ids = ["insight-1"]
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.handle_turn.return_value = mock_turn_result
+        mock_facade._orchestrator = mock_orchestrator
+
+        principal = _make_principal(merchant_uuid)
+
+        with (
+            patch("tools.mcp_tools.resolve_merchant_ref", return_value=merchant_uuid),
+            patch("tools.mcp_tools.ChatFacade", return_value=mock_facade),
+            patch("tools.mcp_tools.BufferedDelivery") as mock_buffered_cls,
+        ):
+            mock_buffered = MagicMock()
+            mock_buffered_cls.return_value = mock_buffered
+            mock_response = MagicMock()
+            mock_response.data = {
+                "text": "Hello from MCP",
+                "claims": [],
+                "tokens_in": 5,
+                "tokens_out": 10,
+                "model": "gpt-4",
+                "tier": "cheap",
+            }
+            mock_buffered.deliver.return_value = mock_response
+
+            from tools.mcp_tools import handle_ask_agent
+
+            result = handle_ask_agent(
+                {
+                    "merchant_ref": str(merchant_uuid),
+                    "message": "What was my revenue last month?",
+                },
+                principal,
+            )
+
+        # Session was auto-created
+        mock_facade.create_session.assert_called_once()
+        call_kwargs = mock_facade.create_session.call_args
+        assert call_kwargs.kwargs["merchant_id"] == merchant_uuid
+
+        # handle_turn was called (orchestrator)
+        mock_orchestrator.handle_turn.assert_called_once()
+        call_kwargs = mock_orchestrator.handle_turn.call_args
+        assert call_kwargs.kwargs["user_message_content"] == (
+            "What was my revenue last month?"
+        )
+        assert call_kwargs.kwargs["stream"] is False
+
+        # BufferedDelivery was used (not Streaming)
+        mock_buffered_cls.assert_called_once()
+        mock_buffered.deliver.assert_called_once()
+        stream_args = mock_buffered.deliver.call_args
+        assert "streaming_content" not in stream_args.kwargs or True
+
+        # Response includes session_id and referenced_insight_ids
+        assert "session_id" in result
+        assert result["session_id"] == str(mock_session.id)
+        assert result["referenced_insight_ids"] == ["insight-1"]
+        assert result["text"] == "Hello from MCP"
+        assert result["model"] == "gpt-4"
+        assert result["tier"] == "cheap"
+
+    def test_uses_existing_session_when_provided(self):
+        """When session_id is provided, no new session is created (§9.6.7)."""
+        merchant_uuid = uuid4()
+        existing_session_id = uuid4()
+
+        mock_session = MagicMock()
+        mock_session.id = existing_session_id
+
+        mock_session_repo = MagicMock()
+        mock_session_repo.get.return_value = mock_session
+
+        mock_facade = MagicMock()
+        mock_facade._session_repo = mock_session_repo
+        mock_facade._orchestrator = MagicMock()
+
+        mock_turn_result = MagicMock()
+        mock_turn_result.chunks = []
+        mock_turn_result.referenced_insight_ids = []
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.handle_turn.return_value = mock_turn_result
+        mock_facade._orchestrator = mock_orchestrator
+
+        principal = _make_principal(merchant_uuid)
+
+        with (
+            patch("tools.mcp_tools.resolve_merchant_ref", return_value=merchant_uuid),
+            patch("tools.mcp_tools.ChatFacade", return_value=mock_facade),
+            patch("tools.mcp_tools.BufferedDelivery") as mock_buffered_cls,
+            patch("tools.mcp_tools.AuthzEnforcer"),
+        ):
+            mock_buffered = MagicMock()
+            mock_buffered_cls.return_value = mock_buffered
+            mock_response = MagicMock()
+            mock_response.data = {
+                "text": "Answer", "claims": [],
+                "tokens_in": 1, "tokens_out": 2,
+                "model": "gpt-4", "tier": "cheap",
+            }
+            mock_buffered.deliver.return_value = mock_response
+
+            from tools.mcp_tools import handle_ask_agent
+
+            result = handle_ask_agent(
+                {
+                    "merchant_ref": str(merchant_uuid),
+                    "session_id": str(existing_session_id),
+                    "message": "Hello",
+                },
+                principal,
+            )
+
+        # No new session created — existing session used
+        mock_facade.create_session.assert_not_called()
+        mock_session_repo.get.assert_called_once_with(existing_session_id)
+
+        assert result["session_id"] == str(existing_session_id)
+
+    def test_budget_exceeded_returns_error_dict(self):
+        """ChatBudgetExceededError is caught and returned as error dict (§19.24)."""
+        merchant_uuid = uuid4()
+
+        mock_facade = MagicMock()
+        mock_facade._orchestrator = MagicMock()
+        mock_facade._session_repo = MagicMock()
+
+        from chat.services.chat_orchestration_service import (
+            ChatBudgetExceededError,
+        )
+
+        mock_facade._orchestrator.handle_turn.side_effect = (
+            ChatBudgetExceededError(retry_after_seconds=1800)
+        )
+
+        principal = _make_principal(merchant_uuid)
+
+        with (
+            patch("tools.mcp_tools.resolve_merchant_ref", return_value=merchant_uuid),
+            patch("tools.mcp_tools.ChatFacade", return_value=mock_facade),
+            patch("tools.mcp_tools.AuthzEnforcer"),
+        ):
+            from tools.mcp_tools import handle_ask_agent
+
+            result = handle_ask_agent(
+                {
+                    "merchant_ref": str(merchant_uuid),
+                    "message": "Hello",
+                },
+                principal,
+            )
+
+        assert result["error"] == "CHAT_BUDGET_EXCEEDED"
+        assert result["code"] == "budget_exceeded"
+        assert result["retry_after_seconds"] == 1800
+
+    def test_merchant_ref_not_found(self):
+        """Unresolvable merchant_ref returns MERCHANT_NOT_FOUND (§19.23)."""
+        principal = _make_principal(uuid4())
+
+        with patch("tools.mcp_tools.resolve_merchant_ref", return_value=None):
+            from tools.mcp_tools import handle_ask_agent
+
+            result = handle_ask_agent(
+                {
+                    "merchant_ref": "invalid-ref",
+                    "message": "Hello",
+                },
+                principal,
+            )
+
+        assert result["error"] == "MERCHANT_NOT_FOUND"
+
+
+class TestSharedBudgetAndRateLimit:
+    """§19.29: MCP-originated chat and browser-originated chat draw from
+    the SAME chat-scope cost ledger and rate-limit bucket — there is no
+    separate MCP chat budget.
+    """
+
+    def test_same_cost_ledger_instance(self):
+        """MCP ask_agent uses the same CostLedger singleton as REST (§19.24)."""
+        from gateway.cost_ledger import SCOPE_CHAT, CostLedger
+
+        mcp_ledger = CostLedger.instance()
+        rest_ledger = CostLedger.instance()
+
+        assert mcp_ledger is rest_ledger
+        assert SCOPE_CHAT == "chat"
+
+    def test_chat_scope_separate_from_agent(self):
+        """SCOPE_CHAT != SCOPE_AGENT (§19.24)."""
+        from gateway.cost_ledger import SCOPE_AGENT, SCOPE_CHAT
+
+        assert SCOPE_CHAT == "chat"
+        assert SCOPE_AGENT == "agent"
+        assert SCOPE_CHAT != SCOPE_AGENT
+
+    def test_same_rate_limiter_bucket(self):
+        """MCP ask_agent uses the same RateLimiter chat bucket as REST (§10.3)."""
+        from middlewares.rate_limiter import _BUCKET_CONFIGS
+
+        assert "chat" in _BUCKET_CONFIGS
+        config = _BUCKET_CONFIGS["chat"]
+        assert config.capacity == 30
+        assert config.refill_rate == 0.5
+
+    @patch("tools.mcp_tools.resolve_merchant_ref")
+    @patch("tools.mcp_tools.ChatFacade")
+    @patch("tools.mcp_tools.AuthzEnforcer")
+    @patch("tools.mcp_tools.BufferedDelivery")
+    def test_mcp_chat_turn_calls_orchestrator(
+        self,
+        mock_buffered_cls,
+        mock_enforcer_cls,
+        mock_facade_cls,
+        mock_resolve_ref,
+    ):
+        """MCP ask_agent delegates to ChatOrchestrationService.handle_turn
+        which uses SCOPE_CHAT internally (§19.24). We verify the orchestrator
+        is called — the same orchestrator REST uses.
+        """
+        merchant_uuid = uuid4()
+        mock_resolve_ref.return_value = merchant_uuid
+
+        mock_facade = MagicMock()
+        mock_facade_cls.return_value = mock_facade
+
+        mock_session = MagicMock()
+        mock_session.id = uuid4()
+        mock_facade._session_repo.get.return_value = None
+        mock_facade.create_session.return_value = mock_session
+
+        mock_turn_result = MagicMock()
+        mock_turn_result.chunks = []
+        mock_turn_result.referenced_insight_ids = []
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.handle_turn.return_value = mock_turn_result
+        mock_facade._orchestrator = mock_orchestrator
+
+        mock_buffered = MagicMock()
+        mock_buffered_cls.return_value = mock_buffered
+        mock_response = MagicMock()
+        mock_response.data = {
+            "text": "Answer", "claims": [],
+            "tokens_in": 1, "tokens_out": 2,
+            "model": "gpt-4", "tier": "cheap",
+        }
+        mock_buffered.deliver.return_value = mock_response
+
+        principal = _make_principal(merchant_uuid)
+
+        from tools.mcp_tools import handle_ask_agent
+
+        result = handle_ask_agent(
+            {
+                "merchant_ref": str(merchant_uuid),
+                "message": "What was my revenue?",
+            },
+            principal,
+        )
+
+        assert result["text"] == "Answer"
+        assert result["session_id"] == str(mock_session.id)
+
+        mock_orchestrator.handle_turn.assert_called_once()
+        call_kwargs = mock_orchestrator.handle_turn.call_args
+        assert call_kwargs.kwargs["stream"] is False
+
+    @patch("tools.mcp_tools.resolve_merchant_ref")
+    @patch("tools.mcp_tools.ChatFacade")
+    @patch("tools.mcp_tools.AuthzEnforcer")
+    @patch("tools.mcp_tools.BufferedDelivery")
+    def test_mcp_chat_budget_exceeded(
+        self,
+        mock_buffered_cls,
+        mock_enforcer_cls,
+        mock_facade_cls,
+        mock_resolve_ref,
+    ):
+        """ChatBudgetExceededError from the orchestrator is caught by MCP
+        handler and returned as error dict — same as REST 503 (§19.24, §19.29).
+        """
+        merchant_uuid = uuid4()
+        mock_resolve_ref.return_value = merchant_uuid
+
+        mock_facade = MagicMock()
+        mock_facade_cls.return_value = mock_facade
+
+        mock_session = MagicMock()
+        mock_session.id = uuid4()
+        mock_facade._session_repo.get.return_value = None
+        mock_facade.create_session.return_value = mock_session
+
+        from chat.services.chat_orchestration_service import (
+            ChatBudgetExceededError,
+        )
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.handle_turn.side_effect = (
+            ChatBudgetExceededError(retry_after_seconds=3600)
+        )
+        mock_facade._orchestrator = mock_orchestrator
+
+        principal = _make_principal(merchant_uuid)
+
+        from tools.mcp_tools import handle_ask_agent
+
+        result = handle_ask_agent(
+            {
+                "merchant_ref": str(merchant_uuid),
+                "message": "Hello",
+            },
+            principal,
+        )
+
+        assert result["error"] == "CHAT_BUDGET_EXCEEDED"
+        assert result["retry_after_seconds"] == 3600

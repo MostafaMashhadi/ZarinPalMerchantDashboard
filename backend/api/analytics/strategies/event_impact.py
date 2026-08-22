@@ -11,9 +11,8 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from shared.dtos import AnalysisParams, AnalysisResult, ProvenanceSpec
-
 from repositories.transaction_repository import TransactionRepository
+from shared.dtos import AnalysisParams, AnalysisResult, ProvenanceSpec
 
 
 class EventImpactAnalysisStrategy:

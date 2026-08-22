@@ -26,14 +26,14 @@ from chat.grounding.chat_grounding_validator import (
     DeterministicTemplateFallback,
 )
 from chat.intent.intent_resolver import IntentClass, IntentResolver
-from chat.models import ChatSession
+from chat.models import ChatSession, MerchantChatMemory
 from chat.repositories.chat_message_repository import ChatMessageRepository
 from chat.repositories.chat_session_repository import ChatSessionRepository
 from chat.repositories.chat_turn_repository import ChatTurnRepository
 from chat.repositories.insight_repository import InsightRepository
 from facades.authz import AuthPrincipal, AuthzEnforcer
 from gateway.chain import ModelRouterChain, build_default_chain
-from gateway.cost_ledger import CostLedger
+from gateway.cost_ledger import SCOPE_CHAT, CostLedger
 from middlewares.rate_limiter import RateLimiter
 from shared.dtos import (
     AnalysisParams,
@@ -55,6 +55,14 @@ FRESHNESS_WINDOWS: dict[str, int] = {
 
 DEFAULT_FRESHNESS_HOURS = 24
 
+# Keywords that signal a message references historical period (§9.6.3)
+HISTORICAL_MEMORY_KEYWORDS = (
+    "last month", "last year", "ago",
+    "previous", "before", "earlier", "history",
+    "what did i ask", "what did you say", "from before",
+    "old conversation", "remember when",
+)
+
 # Token budget for the bounded context (§9.6.3)
 MAX_CONTEXT_TOKENS = 6000
 MAX_MEMORY_TOKENS = 1500
@@ -65,7 +73,12 @@ MAX_RESULT_TOKENS = 1000
 SYSTEM_PROMPT = """You are a merchant analytics assistant for the ZarinPal dashboard.
 You have access to real transaction data, anomaly detection insights, and peer comparisons.
 Always ground numeric claims in the provided structured data. Do not invent numbers.
-Format answers as JSON with fields: narrative, claims[]."""
+Format answers as JSON with fields: narrative, claims[].
+
+If historical_memory is provided, it contains a digest of past conversations
+(beyond the 30-day raw retention window). Treat this as APPROXIMATE RECOLLECTION,
+not fresh data. Clearly label recalled content as approximate. Never present
+recalled numbers as current factual data."""
 
 OUT_OF_SCOPE_TEMPLATE = (
     "I can only help with payment analytics questions — revenue, transaction "
@@ -134,6 +147,14 @@ class ChatOrchestrationService:
 
         # Rate limit check (§10.3)
         self._check_rate_limit(principal)
+
+        # Cost budget check (§19.24) — check before streaming starts
+        if not self._cost_ledger.can_afford(
+            SCOPE_CHAT, "cheap", 500,
+            merchant_id=str(principal.merchant_id),
+        ):
+            retry_after = 3600  # retry after an hour
+            raise ChatBudgetExceededError(retry_after_seconds=retry_after)
 
         # Step 1: check_or_create_turn — idempotent resume (§10.2, §19.27)
         checkpoint_id = self._compute_checkpoint_id(session, user_message_content)
@@ -385,16 +406,26 @@ class ChatOrchestrationService:
 
         System prompt + rolling merchant summary + last-N raw messages
         + structured AnalysisResult. Enforces MAX_CONTEXT_TOKENS.
+
+        If the message plausibly references a period outside the 30-day raw
+        window (e.g. "what did I ask last month about X"), includes the
+        relevant MERCHANT_CHAT_MEMORY summary_text/key_facts for matching
+        periods. This digest content is treated as approximate recollection,
+        NOT fresh data — the ChatGroundingValidator does not require it
+        to trace to a source_insight_id (§9.6.4 deliberate exception,
+        documented below).
         """
-        # Get recent insights for memory
         recent_insights = self._insight_repo.find_recent(session.merchant_id)
         summary_text = self._summarize_memory(recent_insights, MAX_MEMORY_TOKENS)
 
-        # Get last N messages
+        # Check for historical period references (§9.6.3 retention contract)
+        historical_memory = self._get_historical_memory(
+            session.merchant_id, user_message
+        )
+
         recent_messages = self._message_repo.list_for_session(session)
         message_context = self._truncate_history(recent_messages, MAX_HISTORY_TOKENS)
 
-        # Analysis result context
         analysis_context = sourcing_result.get("result", {}) or {}
 
         context = {
@@ -406,6 +437,7 @@ class ChatOrchestrationService:
             "source": sourcing_result["source"],
             "source_data": analysis_context,
             "memory_summary": summary_text,
+            "historical_memory": historical_memory,
             "message_history": message_context,
             "user_message": user_message,
             "low_confidence_peer_set": analysis_context.get(
@@ -414,6 +446,52 @@ class ChatOrchestrationService:
         }
 
         return context
+
+    def _get_historical_memory(
+        self, merchant_id: UUID, user_message: str
+    ) -> dict[str, Any]:
+        """Retrieve MERCHANT_CHAT_MEMORY entries when the message references
+        a period outside the 30-day raw retention window (§9.6.3).
+
+        This digested context is treated as APPROXIMATE RECOLLECTION, not
+        fresh data. The ChatGroundingValidator deliberately does NOT require
+        these recalled numbers to trace to a source_insight_id — they are
+        summaries of past conversations, not current data assertions.
+        This is a narrow, documented exception to the general grounding rule.
+        """
+        lower_message = user_message.lower()
+        if not any(kw in lower_message for kw in HISTORICAL_MEMORY_KEYWORDS):
+            return {}
+
+        now = datetime.now()
+        cutoff = now - timedelta(days=30)
+
+        memory_entries = list(MerchantChatMemory.objects.filter(
+            merchant_id=merchant_id,
+            period_end__lte=cutoff.replace(tzinfo=None),
+        ).order_by("-period_start")[:3])
+
+        if not memory_entries:
+            return {}
+
+        memories = []
+        for entry in memory_entries:
+            memories.append({
+                "period_start": entry.period_start.isoformat(),
+                "period_end": entry.period_end.isoformat(),
+                "summary_text": (entry.summary_text or "")[:500],
+                "key_facts": entry.key_facts or [],
+            })
+
+        return {
+            "digest_available": True,
+            "memories": memories,
+            "note": (
+                "The following content is from MERCHANT_CHAT_MEMORY — a "
+                "consolidated digest of past conversations. Treat as "
+                "approximate recollection, NOT fresh data."
+            ),
+        }
 
     def _summarize_memory(
         self, insights: list, max_tokens: int
@@ -467,9 +545,12 @@ class ChatOrchestrationService:
                 "source": context.get("source", ""),
                 "source_data": context.get("source_data", {}),
                 "memory_summary": context.get("memory_summary", ""),
+                "historical_memory": context.get("historical_memory", {}),
                 "message_history": context.get("message_history", []),
                 "intent": context.get("intent", ""),
-                "low_confidence_peer_set": context.get("low_confidence_peer_set", False),
+                "low_confidence_peer_set": context.get(
+                    "low_confidence_peer_set", False
+                ),
                 "chat_turn_step_id": context.get("chat_turn_step_id"),
             },
             stream=stream,
@@ -501,6 +582,7 @@ class ChatOrchestrationService:
         grounding_context = {
             "source_data": source_data,
             "low_confidence_peer_set": low_confidence,
+            "historical_memory": context.get("historical_memory", {}),
         }
 
         result = self._grounding_validator.validate(narrative, claims, grounding_context)

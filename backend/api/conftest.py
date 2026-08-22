@@ -3,9 +3,13 @@
 Pytest-django initializes Django settings during conftest loading,
 which happens before tests/conftest.py. This root conftest ensures
 env defaults are set early.
+
+Also adds temporal-worker/ to sys.path so that activities and workflows
+modules are importable from chat tests.
 """
 
 import os
+import sys
 
 os.environ.setdefault("DJANGO_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("JWT_ACCESS_SECRET", "test-access-secret")
@@ -21,3 +25,5 @@ os.environ.setdefault("CLICKHOUSE_DB", "zarinpal")
 os.environ.setdefault("CLICKHOUSE_USER", "zarinpal")
 os.environ.setdefault("CLICKHOUSE_PASSWORD", "zarinpal")
 os.environ.setdefault("REDIS_HOST", "")
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "temporal-worker"))

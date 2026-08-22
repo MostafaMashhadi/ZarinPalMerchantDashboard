@@ -95,7 +95,6 @@ services:
   # Sprint 0.2 — Django + DRF. Also hosts chat turn-handling (§9.6); no separate chat service.
   # ASGI runtime: uvicorn (dev, autoreload) / gunicorn + uvicorn workers (prod) — SSE-ready.
   api:
-    profiles: ["app"]
     build:
       context: ./backend
       dockerfile: api/Dockerfile
@@ -120,7 +119,6 @@ services:
 
   # Sprint 0.3 — React app; chat panel from Sprint 3 onward.
   frontend:
-    profiles: ["app"]
     build:
       context: ./frontend
     env_file:

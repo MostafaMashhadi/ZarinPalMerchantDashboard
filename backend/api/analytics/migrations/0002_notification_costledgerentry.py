@@ -107,6 +107,9 @@ class Migration(migrations.Migration):
                         to="merchants.merchant",
                     ),
                 ),
+                ("tier", models.CharField(default="cheap", max_length=32)),
+                ("tokens_in", models.IntegerField(default=0)),
+                ("tokens_out", models.IntegerField(default=0)),
             ],
             options={
                 "db_table": "cost_ledger_entry",

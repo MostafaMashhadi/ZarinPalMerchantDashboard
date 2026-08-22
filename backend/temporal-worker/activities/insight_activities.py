@@ -19,14 +19,17 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from gateway.adapters.avalai_adapter import estimate_cost_usd
+from gateway.cost_ledger import SCOPE_AGENT, CostLedger
+from gateway.event_bus import (
+    InsightEventBus,
+    InsightPublishedEvent,
+)
 from temporalio import activity
 
-from cost_ledger import CostLedger
-from event_bus import InsightEventBus, InsightPublishedEvent
 from shared.dtos import DraftResponse, SourcedClaim
 
 logger = logging.getLogger(__name__)
@@ -344,20 +347,25 @@ async def draft_narrative(input: DraftInput) -> DraftOutput:
     """
     cost_ledger = CostLedger.instance()
 
-    estimated_cost = Decimal("0.05")
     if not cost_ledger.can_afford(
-        scope=CostLedger.SCOPE_AGENT,
+        scope=SCOPE_AGENT,
+        tier="cheap",
+        estimated_tokens=200,
         merchant_id=str(input.merchant_id),
-        estimated_cost=estimated_cost,
     ):
         _raise_cost_ceiling_error("Cost ceiling exceeded for agent scope")
     draft_response = _generate_draft(input)
-    actual_cost = Decimal("0.02")
+    actual_cost = estimate_cost_usd(
+        "cheap", draft_response.tokens_in + draft_response.tokens_out
+    )
 
     cost_ledger.debit(
-        scope=CostLedger.SCOPE_AGENT,
+        scope=SCOPE_AGENT,
+        tier="cheap",
+        tokens_in=draft_response.tokens_in,
+        tokens_out=draft_response.tokens_out,
         merchant_id=str(input.merchant_id),
-        amount=actual_cost,
+        agent_run_step_id=None,
     )
 
     return DraftOutput(
@@ -411,20 +419,23 @@ async def validate_against_data(validation_input: ValidationInput) -> bool:
     """
     cost_ledger = CostLedger.instance()
 
-    estimated_cost = Decimal("0.01")
     if not cost_ledger.can_afford(
-        scope=CostLedger.SCOPE_AGENT,
+        scope=SCOPE_AGENT,
+        tier="cheap",
+        estimated_tokens=50,
         merchant_id=str(validation_input.merchant_id),
-        estimated_cost=estimated_cost,
     ):
         _raise_cost_ceiling_error("Cost ceiling exceeded for agent scope")
 
     _ = validation_input
 
     cost_ledger.debit(
-        scope=CostLedger.SCOPE_AGENT,
+        scope=SCOPE_AGENT,
+        tier="cheap",
+        tokens_in=10,
+        tokens_out=20,
         merchant_id=str(validation_input.merchant_id),
-        amount=Decimal("0.005"),
+        agent_run_step_id=None,
     )
 
     return True

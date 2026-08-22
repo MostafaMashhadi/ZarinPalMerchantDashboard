@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
-testpaths = ["tests", "api/tests"]
+testpaths = ["tests", "api/tests", "mcp-server/tests"]
 pythonpath = [".", "shared", "api"]
 addopts = "-ra"
 

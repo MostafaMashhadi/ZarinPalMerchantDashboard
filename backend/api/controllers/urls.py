@@ -14,6 +14,10 @@ from controllers.analytics_controller import (
     DashboardSummaryController,
 )
 from controllers.auth_controller import LoginController, LogoutController, RefreshController
+from controllers.chat_controller import (
+    ChatSessionListController,
+    ChatSessionMessagesController,
+)
 from controllers.health import HealthController
 from controllers.notification_controller import (
     NotificationListController,
@@ -79,5 +83,11 @@ urlpatterns = [
         "merchants/<str:merchant_ref>/notifications/<str:notification_id>/mark-read",
         NotificationMarkReadController.as_view(),
         name="notification-mark-read",
+    ),
+    path("chat/sessions", ChatSessionListController.as_view(), name="chat-sessions"),
+    path(
+        "chat/sessions/<str:session_id>/messages",
+        ChatSessionMessagesController.as_view(),
+        name="chat-session-messages",
     ),
 ]

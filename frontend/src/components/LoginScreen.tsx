@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertTriangle, ArrowLeft, ShieldCheck, Zap, HeadphonesIcon, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import ZarinpalLogo from './ZarinpalLogo'
 
 const LoginScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -48,12 +49,9 @@ const LoginScreen: React.FC = () => {
 
         {/* Logo area */}
         <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-12">
-            <div className="size-12 rounded-2xl logo-zarin flex items-center justify-center ring-1 ring-white/15 ring-inset">
-              <span className="text-xl font-black text-white">Z</span>
-            </div>
+          <div className="mb-12 flex flex-col items-start gap-2">
+            <ZarinpalLogo className="h-24 w-20 rounded-lg bg-white p-1.5 ring-1 ring-white/15 ring-inset" />
             <div>
-              <div className="text-white font-black text-lg tracking-tight leading-tight">زرین‌پال</div>
               <div className="text-white/50 text-xs font-medium">پلتفرم هوشمند پرداخت</div>
             </div>
           </div>
@@ -104,9 +102,7 @@ const LoginScreen: React.FC = () => {
         <div className="relative w-full max-w-md animate-scale-in">
           {/* Mobile logo (visible only below lg) */}
           <div className="lg:hidden mb-8 text-center">
-            <div className="mx-auto mb-4 size-16 rounded-2xl logo-zarin flex items-center justify-center ring-2 ring-zarin-green/20">
-              <span className="text-2xl font-black text-white">Z</span>
-            </div>
+            <ZarinpalLogo className="mx-auto mb-4 h-28 w-22 rounded-lg bg-white p-2 shadow-sm ring-2 ring-zarin-green/20" />
             <h1 className="text-xl font-black tracking-tight text-foreground">داشبورد تحلیلی زرین‌پال</h1>
             <p className="mt-1.5 text-sm text-muted-foreground">ورود به پنل پذیرنده</p>
           </div>

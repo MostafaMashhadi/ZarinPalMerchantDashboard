@@ -18,6 +18,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { setSelectedMerchant } from '@/store/dashboardSlice'
 import { resetInsights } from '@/store/insightsSlice'
 import { resetAgent } from '@/store/agentSlice'
+import ZarinpalLogo from './ZarinpalLogo'
 
 interface NavItem {
   id: string
@@ -69,9 +70,7 @@ const SidebarNav: React.FC = () => {
     <>
       <SidebarHeader className="zarinpal-sidebar gap-3 p-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:p-2">
         <div className="flex min-w-0 items-center gap-3 overflow-hidden rounded-xl bg-gradient-to-br from-zarin-navy to-zarin-navy-soft p-2 shadow-lg group-data-[collapsible=icon]:size-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/15 shadow-sm ring-1 ring-white/20">
-              <span className="select-none text-sm font-black text-white">Z</span>
-            </div>
+            <ZarinpalLogo className="h-12 w-10 rounded-md bg-white p-1 shadow-sm ring-1 ring-white/20 group-data-[collapsible=icon]:size-10 group-data-[collapsible=icon]:p-1.5" />
             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
               <span className="block truncate text-sm font-black tracking-tight text-white">زرین‌پال</span>
               <span className="block truncate text-[10px] font-medium text-white/70">پلتفرم هوشمند</span>

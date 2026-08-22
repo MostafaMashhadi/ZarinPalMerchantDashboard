@@ -202,9 +202,9 @@ class AvalAIAdapter:
 
 
 __all__ = [
+    "TOKENS_PER_USD",
     "AvalAIAdapter",
     "AvalAITierConfig",
-    "TOKENS_PER_USD",
     "estimate_cost_usd",
     "get_tier_config",
 ]

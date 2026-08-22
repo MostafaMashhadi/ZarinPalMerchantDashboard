@@ -168,8 +168,9 @@ class DraftInput:
 class ValidationInput:
     merchant_id: UUID
     narrative: str
-    claims: list[str]
+    claims: list[SourcedClaim]
     source_data: dict[str, Any]
+    agent_run_step_id: UUID | None = None
 
 
 def _is_permanent_data_error(exc: Exception) -> bool:
@@ -427,7 +428,32 @@ async def validate_against_data(validation_input: ValidationInput) -> bool:
     ):
         _raise_cost_ceiling_error("Cost ceiling exceeded for agent scope")
 
-    _ = validation_input
+    source_data = validation_input.source_data or {}
+    claims = validation_input.claims or []
+
+    allowed_values: set[str] = set()
+    for c in claims:
+        allowed_values.add(str(c.value))
+    for v in source_data.values():
+        allowed_values.add(str(v))
+
+    import re
+
+    narrative_clean = re.sub(
+        r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:[-/]\d{1,2})?",
+        "",
+        validation_input.narrative,
+    )
+    numbers_in_narrative = re.findall(
+        r"[-+]?\d+(?:\.\d+)?", narrative_clean
+    )
+
+    for num_str in numbers_in_narrative:
+        if num_str not in allowed_values:
+            raise ValueError(
+                f"Ungrounded numeric value '{num_str}' found in narrative. "
+                f"All numbers must be traceable to source data or claims."
+            )
 
     cost_ledger.debit(
         scope=SCOPE_AGENT,
@@ -435,7 +461,7 @@ async def validate_against_data(validation_input: ValidationInput) -> bool:
         tokens_in=10,
         tokens_out=20,
         merchant_id=str(validation_input.merchant_id),
-        agent_run_step_id=None,
+        agent_run_step_id=validation_input.agent_run_step_id,
     )
 
     return True

@@ -1,9 +1,10 @@
 """LLMCircuitBreaker — per-tier circuit breaker, Redis-backed (§6.4, §9.3, §19.17).
 
-State machine: closed → open (5 failures in 60s) → half-open (30s cooldown) → single probe → closed (success) or open (failure).
+State machine: closed to open (5 failures in 60s), open for 30s cooldown,
+then half-open probe, then back to closed (success) or open (failure).
 
-One instance per tier, shared across all Temporal workers and all API processes
-handling chat turns — all observe the same breaker state via Redis.
+One instance per tier, shared across all Temporal workers and all API
+processes handling chat turns.
 """
 
 from __future__ import annotations
@@ -12,7 +13,6 @@ import os
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal
 
 import redis
 

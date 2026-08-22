@@ -26,6 +26,13 @@ class Merchant(models.Model):
         db_column="category_id",
     )
     is_active = models.BooleanField(default=True)
+    notification_prefs = models.JSONField(
+        default=dict,
+        help_text=(
+            "Per-merchant notification preferences: "
+            '{"severity_threshold": "warning", "channels": ["in_app", "email"]}'
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

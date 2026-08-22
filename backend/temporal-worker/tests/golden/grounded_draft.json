@@ -1,0 +1,13 @@
+{
+    "narrative": "In the period Aug 1-15, your gross volume was 12500000 Toman with 42 successful sessions. Your success rate was 85.5% compared to a category average of 78.2%.",
+    "claims": [
+        {"claim": "gross_volume", "value": 12500000, "source_insight_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+        {"claim": "successful_sessions", "value": 42, "source_insight_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+        {"claim": "success_rate", "value": 85.5, "source_insight_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+        {"claim": "category_avg_success_rate", "value": 78.2, "source_insight_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"}
+    ],
+    "tokens_in": 100,
+    "tokens_out": 150,
+    "model": "cheap-tier",
+    "tier": "cheap"
+}

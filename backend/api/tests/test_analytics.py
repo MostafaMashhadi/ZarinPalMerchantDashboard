@@ -830,3 +830,39 @@ class TestAnomalyDetectionAnalysisStrategy:
         mock_publisher = MagicMock()
         strategy.set_insight_publisher(mock_publisher)
         assert strategy._notify is mock_publisher
+
+    def test_chat_triggered_anomaly_reaches_same_publish_call(
+        self, merchant_id, fixed_period, mock_clusters
+    ):
+        """§19.18: A chat-triggered anomaly-detection run reaches the exact same
+        InsightEventBus.publish() call as a REST-triggered run.
+
+        The Strategy has no notion of its caller (per Task 2.2's note) —
+        it always publishes to the InsightEventBus regardless of whether
+        invoked via REST or chat real-time analysis path (Task 3.6).
+        """
+        from gateway.event_bus import InsightEventBus, InsightPublishedEvent
+
+        InsightEventBus.reset_for_testing()
+
+        start, end = fixed_period
+        mock_repo = MagicMock()
+        mock_repo.get_terminal_anomaly_clusters.return_value = mock_clusters
+
+        strategy = AnomalyDetectionAnalysisStrategy(repo=mock_repo)
+
+        published_events: list[InsightPublishedEvent] = []
+        bus = InsightEventBus.instance()
+        bus.subscribe(published_events.append)
+
+        params = AnalysisParams(
+            period_start=start,
+            period_end=end,
+            extra={},
+        )
+        result = strategy.compute(merchant_id, params)
+
+        assert result.body.get("flagged_count", 0) > 0
+        assert len(published_events) == 1
+        assert published_events[0].merchant_id == merchant_id
+        assert published_events[0].kind == "anomaly_detection"

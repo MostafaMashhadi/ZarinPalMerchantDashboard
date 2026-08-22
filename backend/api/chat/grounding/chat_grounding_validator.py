@@ -50,10 +50,26 @@ class NumericGroundingCheck(GroundingCheck):
         allowed: set[str] = set()
         for c in claims:
             allowed.add(str(c.value))
+
         source_data = context.get("source_data", {})
         if isinstance(source_data, dict):
             for v in source_data.values():
                 allowed.add(str(v))
+
+        """Historical memory exception (§9.6.3, §9.6.4):
+        Numbers recalled from MERCHANT_CHAT_MEMORY (past conversations beyond
+        the 30-day raw window) are APPROXIMATE recollections, not fresh data
+        assertions. They are NOT required to trace to a source_insight_id.
+        This is a deliberate, narrow exception to the general grounding rule.
+        We extract numeric tokens from key_facts so the narrative's numbers
+        are matchable without falsely rejected.
+        """
+        historical = context.get("historical_memory", {})
+        if isinstance(historical, dict) and historical.get("digest_available"):
+            for mem in historical.get("memories", []):
+                for fact in mem.get("key_facts", []):
+                    for num in re.findall(r"[-+]?\d+(?:\.\d+)?", str(fact)):
+                        allowed.add(num)
 
         narrative_clean = self.DATE_PATTERN.sub("", narrative)
         numbers = re.findall(r"[-+]?\d+(?:\.\d+)?", narrative_clean)

@@ -10,6 +10,12 @@ import os
 
 from temporalio import worker
 
+from activities.chat_memory_activities import (
+    delete_consolidated_messages,
+    find_sessions_to_consolidate,
+    summarize_chat_memory,
+    upsert_merchant_chat_memory,
+)
 from activities.insight_activities import (
     detect_candidate_insights,
     draft_narrative,
@@ -24,6 +30,7 @@ from queues import (
     CHAT_QUEUE,
     NOTIFICATION_QUEUE,
 )
+from workflows.chat_memory_consolidation import ChatMemoryConsolidationWorkflow
 from workflows.insight_generation import InsightGenerationWorkflow
 
 
@@ -50,7 +57,10 @@ async def run_worker(
     """
     w = worker.Worker(
         client=await _get_client(),
-        workflows=workflows or [InsightGenerationWorkflow],
+         workflows=workflows or [
+             InsightGenerationWorkflow,
+             ChatMemoryConsolidationWorkflow,
+         ],
         activities=activities or [
             fetch_metrics,
             segment_data,
@@ -97,17 +107,21 @@ async def main() -> None:
             publish,
         ]),
         (NOTIFICATION_QUEUE.name, []),
-        (CHAT_QUEUE.name, [
-            segment_data,
-        ]),
+         (CHAT_QUEUE.name, [
+            find_sessions_to_consolidate,
+            summarize_chat_memory,
+            upsert_merchant_chat_memory,
+            delete_consolidated_messages,
+         ]),
     ]
 
     workers = []
+    all_workflows = [InsightGenerationWorkflow, ChatMemoryConsolidationWorkflow]
     for queue_name, activities in queues_and_activities:
         if activities:
             w = worker.Worker(
                 client=temporal_client,
-                workflows=[InsightGenerationWorkflow],
+                workflows=all_workflows,
                 activities=activities,
                 task_queue=queue_name,
             )
